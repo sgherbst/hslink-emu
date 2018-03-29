@@ -99,11 +99,10 @@ def get_impulse(f, tf, dt, T):
 
     return y_imp
 
-def s4p_to_step(s4p, dt, T, zs=50, zl=50):
-    y_imp = s4p_to_impulse(s4p=s4p, dt=dt, T=T, zs=zs, zl=zl)
-    y_step = cumtrapz(y_imp, initial=0)*dt
+def imp2step(imp, dt):
+    step = cumtrapz(imp, initial=0)*dt
 
-    return y_step
+    return step
 
 def s4p_to_impulse(s4p, dt, T, zs=50, zl=50):
     # read S-parameter file
@@ -147,7 +146,8 @@ def main(dt=.1e-12, T=20e-9):
 
     s4p = get_sample_s4p()
 
-    y_step = s4p_to_step(s4p, dt, T)
+    y_imp = s4p_to_impulse(s4p, dt, T)
+    y_step = imp2step(y_imp, dt)
 
     plt.plot(dt*np.arange(len(y_step)), y_step)
     plt.show()
