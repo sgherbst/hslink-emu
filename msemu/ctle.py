@@ -1,7 +1,8 @@
 from numpy import convolve
 import numpy as np
 from math import pi
-from msemu.tf import my_impulse
+from msemu.tf import my_abcd
+from scipy.signal import impulse
 
 def db2mag(db):
     return 10.0**(db/20.0)
@@ -18,9 +19,10 @@ def get_ctle_imp(dt, T, fp1=2e9, fp2=8e9, db=-4):
     
     # compute impulse response of CTLE
     # done with custom code due to issues with tf2ss and impulse
-    ctle_imp = my_impulse(sys=(num, den), dt=dt, T=T)
+    sys = my_abcd((num, den))
+    t, imp = impulse(sys, T=np.arange(0, T, dt))
 
-    return ctle_imp
+    return t, imp
 
 def main(dt=.1e-12, T=10e-9):
     import matplotlib.pyplot as plt

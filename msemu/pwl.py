@@ -5,10 +5,18 @@ import logging, sys
 
 class PWL:
     def __init__(self, offsets, slopes, times, dtau):
-        self.offsets = offsets
-        self.slopes = slopes
         self.times = times
         self.dtau = dtau
+
+        assert len(offsets) == self.n
+        self.offsets = offsets
+
+        assert len(slopes) == self.n
+        self.slopes = slopes
+
+    @property
+    def n(self):
+        return len(self.times)
 
     def domain(self, dt):
         return np.arange(self.times[0], self.times[-1], dt)
@@ -16,6 +24,14 @@ class PWL:
     def eval(self, pts):
         idx = np.floor((pts-self.times[0])/self.dtau).astype(int)
         return self.offsets[idx] + self.slopes[idx]*(pts-self.times[idx])
+
+    def to_fixed_table(self, offset_fmt, slope_fmt, bias=0):
+        retval = ''
+
+        for offset, slope in zip(self.offsets, self.slopes):
+            retval += offset_fmt.bin_str(offset-bias) + slope_fmt.bin_str(slope) + '\n'
+
+        return retval
 
 class Waveform:
     def __init__(self, t, v):
@@ -45,6 +61,9 @@ class Waveform:
         nchk = idx_max-idx_min+1
         A = scipy.sparse.dok_matrix((nchk, n+1), dtype=np.float64)
 
+        # used to make sure no control points are skipped
+        last_idx_int = -1
+
         for k in range(nchk):
             # time of point to check
             tchk = self.t[k+idx_min]
@@ -53,11 +72,17 @@ class Waveform:
             idx_float = (tchk - times[0])/dtau
             idx_int = np.floor(idx_float).astype(int)
 
+            # check to ensure no control points are skipped
+            assert (idx_int - last_idx_int) <= 1
+
             # linear correction term
             alpha = idx_float - idx_int
 
             A[k, idx_int] = 1 - alpha
             A[k, idx_int+1] = alpha
+
+            # update history of control points
+            last_idx_int = idx_int
 
         # construct the optimization problem
         A = cvxpy.Constant(A)
@@ -75,21 +100,28 @@ class Waveform:
         offsets = values[:-1]
         slopes = np.diff(values)/dtau
 
-        return PWL(offsets=offsets, slopes=slopes, times=times, dtau=dtau)
+        return PWL(offsets=offsets, slopes=slopes, times=times[:-1], dtau=dtau)
 
 def main():
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
-    t = np.linspace(0, 3, 10e3)
+    t = np.linspace(0, 3, 1e3)
     v = np.exp(t)
 
     wave = Waveform(t, v)
     pwl = wave.make_pwl(0.5, 2.5, 4)
 
+    from msemu.fixed import FixedSigned
+    fmt = FixedSigned.get_format(10, 0.001)
+
+    print('PWL Table')
+    print('Size: {} bits'.format(pwl.n*(fmt.n+fmt.n)))
+    print(pwl.to_fixed_table(fmt, fmt))
+
     import matplotlib.pyplot as plt
     t_eval = pwl.domain(0.01)
     plt.plot(t, v, t_eval, pwl.eval(t_eval))
     plt.show()
-    
+
 if __name__=='__main__':
     main()

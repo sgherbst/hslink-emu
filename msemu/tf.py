@@ -1,6 +1,6 @@
 import numpy as np
-from scipy.signal import tf2ss, zpk2ss
-from scipy.linalg import matrix_balance, svd, norm, expm
+from scipy.signal import tf2ss, zpk2ss, impulse
+from scipy.linalg import matrix_balance, svd, norm
 from numpy.linalg import inv
 
 def my_abcd(sys):
@@ -38,27 +38,12 @@ def my_abcd(sys):
 
     return A_prime, B_prime, C_prime, D
 
-def my_impulse(sys, dt, T):
-    A, B, C, D = my_abcd(sys)
+##################################################################
+# Nullspace function is from the SciPy Cookbook
+# Warren Weckesser, 2011-09-14
+# http://scipy-cookbook.readthedocs.io/items/RankNullspace.html
+##################################################################
 
-    # evolution matrix
-    E = expm(dt*A)
-
-    # initialization
-    nt = int(np.ceil((T/dt)+1))
-    t = np.zeros(nt)
-    out = np.zeros(nt)
-    S = np.eye(A.shape[0])
-
-    # evaluate successive points along the impulse response
-    for k in range(nt):
-        t[k] = k*dt
-        out[k] = C.dot(S).dot(B)
-        S = E.dot(S)
-
-    return t, out
-
-# nullspace reference: http://scipy-cookbook.readthedocs.io/items/RankNullspace.html
 def nullspace(A, atol=1e-13, rtol=0):
     """Compute an approximate basis for the nullspace of A.
 
@@ -99,10 +84,16 @@ def nullspace(A, atol=1e-13, rtol=0):
     ns = vh[nnz:].conj().T
     return ns
 
-def main(tau=1e-9, dt=.1e-9, T=10e-9):
+##################################################################
+# end of code from SciPy Cookbook
+##################################################################
+
+def main(tau=1e-9, dt=.1e-12, T=10e-9):
     import matplotlib.pyplot as plt
 
-    t, imp = my_impulse(([1], [tau, 1]), dt=dt, T=T)
+    sys = my_abcd(([1], [tau, 1]))
+
+    t, imp = impulse(sys, T=np.arange(0, T, dt))
     ideal = 1/tau*np.exp(-t/tau)
 
     plt.plot(t, imp, t, ideal)

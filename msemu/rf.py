@@ -97,7 +97,7 @@ def get_impulse(f, tf, dt, T):
        raise Exception('IFFT contains unacceptable imaginary component.')
     y_imp = np.real(y_imp)
 
-    return y_imp
+    return np.arange(n)*dt, y_imp
 
 def imp2step(imp, dt):
     step = cumtrapz(imp, initial=0)*dt
@@ -119,9 +119,9 @@ def s4p_to_impulse(s4p, dt, T, zs=50, zl=50):
     tf = np.array([s2tf(s2sdd(s), 2 * z0, 2 * zs, 2 * zl) for s in ntwk.s])
 
     # get impulse response
-    y_imp = get_impulse(freq, tf, dt, T)
+    t, y_imp = get_impulse(freq, tf, dt, T)
 
-    return y_imp
+    return t, y_imp
 
 def get_sample_s4p():
     website = 'http://www.ece.tamu.edu/~spalermo/ecen689/'
@@ -146,10 +146,10 @@ def main(dt=.1e-12, T=20e-9):
 
     s4p = get_sample_s4p()
 
-    y_imp = s4p_to_impulse(s4p, dt, T)
+    t, y_imp = s4p_to_impulse(s4p, dt, T)
     y_step = imp2step(y_imp, dt)
 
-    plt.plot(dt*np.arange(len(y_step)), y_step)
+    plt.plot(t, y_step)
     plt.show()
 
 if __name__ == '__main__':
