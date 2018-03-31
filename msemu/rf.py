@@ -47,8 +47,12 @@ def get_impulse(f, tf, dt, T):
     f should be non-negative and increasing.  See https://www.overleaf.com/read/mxxtgdvkmkvt
     """
 
-    # calculate number of points
-    n = int(round(2 ** (ceil(log2(T / dt)))))
+    # calculate number of time points in impulse response
+    n_req = round(T/dt)
+    logging.debug('Number of time points requested: {}'.format(n_req))
+
+    # calculate number of IFFT points
+    n = 1<<int(ceil(log2(n_req)))
     logging.debug('Number of IFFT points: {}'.format(n))
 
     # calculate frequency spacing
@@ -90,19 +94,25 @@ def get_impulse(f, tf, dt, T):
     Gtilde[((n//2)+1):] = np.conjugate(Gtilde[((n//2)-1):0:-1])
 
     # compute impulse response
-    y_imp = n*df*ifft(Gtilde)
+    y_imp = n*df*(ifft(Gtilde)[:n_req])
 
     # check that the impulse response is real to within numerical precision
     if not is_mostly_real(y_imp):
        raise Exception('IFFT contains unacceptable imaginary component.')
     y_imp = np.real(y_imp)
 
-    return np.arange(n)*dt, y_imp
+    return np.arange(n_req)*dt, y_imp
 
 def imp2step(imp, dt):
     step = cumtrapz(imp, initial=0)*dt
 
     return step
+
+def s4p_to_step(s4p, dt, T, zs=50, zl=50):
+    t, imp = s4p_to_impulse(s4p=s4p, dt=dt, T=T, zs=zs, zl=zl)
+    step = imp2step(imp, dt)
+
+    return t, step
 
 def s4p_to_impulse(s4p, dt, T, zs=50, zl=50):
     # read S-parameter file

@@ -2,6 +2,7 @@ import numpy as np
 from math import floor
 import logging, sys
 from scipy.interpolate import interp1d
+from scipy.signal import fftconvolve
 
 def get_samp_point(t, v):
     idx = np.argmax(v)
@@ -17,17 +18,25 @@ def get_isi(t, v, ui, t_samp=None, where='both'):
     n_post = int(floor((t[-1]-t_samp)/ui))
 
     if where.lower() in ['pre']:
-        t_isi = t_samp - ui*np.arange(1, n_pre+1)
+        t_isi = t_samp - ui*np.arange(-n_pre, 0)
     elif where.lower() in ['post']:
         t_isi = t_samp + ui*np.arange(1, n_post+1)
     elif where.lower() in ['both']:
-        t_isi = t_samp + ui*np.concatenate((-np.arange(1, n_pre+1), np.arange(1, n_post+1)))
+        t_isi = t_samp + ui*np.concatenate((np.arange(-n_pre, 0), np.arange(1, n_post+1)))
+    elif where.lower() in ['all']:
+        t_isi = t_samp + ui*np.arange(-n_pre, n_post+1)
     else:
         raise ValueError('Invalid ISI mode.')
 
     v_isi = interp1d(t, v)(t_isi)
 
     return t_isi, v_isi
+
+def get_pulse_resp(t, dt, imp, ui):
+    pulse = interp1d([0, ui, t[-1]], [1, 0, 0], kind='zero')(t)
+    resp = (fftconvolve(imp, pulse)[:len(t)])*dt
+
+    return resp
 
 def main(ui=125e-12, dt=.1e-12, T=20e-9):
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
@@ -37,20 +46,16 @@ def main(ui=125e-12, dt=.1e-12, T=20e-9):
     s4p = msemu.rf.get_sample_s4p()
     t, y_imp = msemu.rf.s4p_to_impulse(s4p, dt, T)
 
-    # generate the pulse
-    in_ = interp1d([0, ui, t[-1]], [1, 0, 0], kind='zero')(t)
-
     # generate the pulse response
-    from scipy.signal import fftconvolve
-    pulse = (fftconvolve(y_imp, in_)[:len(t)])*dt
+    resp = get_pulse_resp(t=t, dt=dt, imp=y_imp, ui=ui)
 
     # get the sampling point
-    t_samp, v_samp = get_samp_point(t=t, v=pulse)
-    t_isi, v_isi = get_isi(t=t, v=pulse, ui=ui, where='both')
+    t_samp, v_samp = get_samp_point(t=t, v=resp)
+    t_isi, v_isi = get_isi(t=t, v=resp, ui=ui, where='both')
 
     # plot results
     import matplotlib.pyplot as plt
-    plt.plot(t, pulse)
+    plt.plot(t, resp)
     plt.plot(t_samp, v_samp, 'o')
     plt.plot(t_isi, v_isi, '*')
     plt.show()

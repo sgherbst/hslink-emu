@@ -1,5 +1,6 @@
 import logging, sys
 from math import log, ceil, floor, log2
+import collections
 
 class Binary:
     def __init__(self, n):
@@ -87,10 +88,16 @@ class FixedUnsigned(Fixed, Unsigned):
         return Unsigned.bin_str(self, self.float2fixed(val))
 
     @staticmethod
-    def get_format(val, res):
+    def get_format(val_or_vals, res):
         point=Fixed.res2point(res)
-        fixed = Fixed.intval(val=val, point=point)
-        n = Unsigned.get_bits(fixed)
+
+        if not isinstance(val_or_vals, collections.Iterable):
+            vals = [val_or_vals]
+        else:
+            vals = val_or_vals
+
+        intvals = [Fixed.intval(val=val, point=point) for val in vals]
+        n = max([Unsigned.get_bits(intval) for intval in intvals])
 
         return FixedUnsigned(n=n, point=point)
 
@@ -103,10 +110,16 @@ class FixedSigned(Fixed, Signed):
         return Signed.bin_str(self, self.float2fixed(val))
 
     @staticmethod
-    def get_format(val, res):
+    def get_format(val_or_vals, res):
         point=Fixed.res2point(res)
-        fixed = Fixed.intval(val=val, point=point)
-        n = Signed.get_bits(fixed)
+
+        if not isinstance(val_or_vals, collections.Iterable):
+            vals = [val_or_vals]
+        else:
+            vals = val_or_vals
+
+        intvals = [Fixed.intval(val=val, point=point) for val in vals]
+        n = max([Signed.get_bits(intval) for intval in intvals])
 
         return FixedSigned(n=n, point=point)
 
