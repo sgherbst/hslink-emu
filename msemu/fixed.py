@@ -28,8 +28,20 @@ class Unsigned(Binary):
         return (1<<self.n)-1
 
     @staticmethod
-    def get_bits(val):
-        return int(ceil(log2(val+1)))
+    def get_bits(val_or_vals):
+        if not isinstance(val_or_vals, collections.Iterable):
+            vals = [val_or_vals]
+        else:
+            vals = val_or_vals
+
+        assert len(vals) > 0
+
+        max_width = 0
+        for val in vals:
+            width = int(ceil(log2(val+1)))
+            max_width = max(width, max_width)
+
+        return max_width
 
 class Signed(Binary):
     @property
@@ -41,11 +53,24 @@ class Signed(Binary):
         return (1<<(self.n-1))-1
 
     @staticmethod
-    def get_bits(val):
-        if val < 0:
-            return int(ceil(1 + log2(-val)))
+    def get_bits(val_or_vals):
+        if not isinstance(val_or_vals, collections.Iterable):
+            vals = [val_or_vals]
         else:
-            return int(ceil(1 + log2(val+1)))
+            vals = val_or_vals
+
+        assert len(vals) > 0
+
+        max_width = 0
+        for val in vals:
+            if val < 0:
+                width = int(ceil(1 + log2(-val)))
+            else:
+                width = int(ceil(1 + log2(val+1)))
+
+            max_width = max(width, max_width)
+
+        return max_width
 
 class Fixed:
     def __init__(self, point):
@@ -97,7 +122,7 @@ class FixedUnsigned(Fixed, Unsigned):
             vals = val_or_vals
 
         intvals = [Fixed.intval(val=val, point=point) for val in vals]
-        n = max([Unsigned.get_bits(intval) for intval in intvals])
+        n = Unsigned.get_bits(intvals)
 
         return FixedUnsigned(n=n, point=point)
 
@@ -119,7 +144,7 @@ class FixedSigned(Fixed, Signed):
             vals = val_or_vals
 
         intvals = [Fixed.intval(val=val, point=point) for val in vals]
-        n = max([Signed.get_bits(intval) for intval in intvals])
+        n = Signed.get_bits(intvals)
 
         return FixedSigned(n=n, point=point)
 
