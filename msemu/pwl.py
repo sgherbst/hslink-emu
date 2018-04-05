@@ -1,5 +1,4 @@
 import numpy as np
-import cvxpy
 import logging, sys
 from math import ceil
 from scipy.interpolate import interp1d
