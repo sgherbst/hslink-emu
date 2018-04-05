@@ -7,7 +7,7 @@ import os.path
 
 from msemu.rf import get_sample_s4p, s4p_to_impulse, imp2step
 from msemu.pwl import Waveform
-from msemu.fixed import Unsigned, Fixed, FixedSigned, FixedUnsigned, Signed, Binary
+from msemu.fixed import FixedWithWidth
 from msemu.ctle import get_ctle_imp
 from msemu.verilog import VerilogPackage, DefineVariable, VerilogTypedef
 
