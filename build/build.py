@@ -11,6 +11,95 @@ from msemu.fixed import Unsigned, Fixed, FixedSigned, FixedUnsigned, Signed, Bin
 from msemu.ctle import get_ctle_imp
 from msemu.verilog import VerilogPackage, DefineVariable, VerilogTypedef
 
+class ErrorBudget:
+    def __init__(self,
+                 err_trunc = 0.01, # residual settling error (%)
+                 err_pwl = 1e-4, # error due to approximation of a continuous waveform by segments
+                 err_offset = 1e-4, # error due to quantization of PWL offset
+                 err_slope = 1e-4, # error due to quantization of PWL slope
+                 err_time = 1e-4, # error due to quantization of input history time
+                 err_value = 1e-4, # error due to quantization of input history value
+                 err_out = 1e-4, # error due to representation of output
+    ):
+        self.err_trunc = err_trunc
+        self.err_pwl = err_pwl
+        self.err_offset = err_offset
+        self.err_slope = err_slope
+        self.err_time = err_time
+        self.err_value = err_value
+        self.err_out = err_out
+
+def main(db=-4, plot_dt=1e-12):
+    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
+
+    err = ErrorBudget()
+    emu = Emulation(err=err)
+    step_ext = emu.build_filter_chain(db=db)
+
+    emu.write_filter_rom_files()
+    emu.write_filter_package()
+
+    emu.write_time_package()
+    emu.write_signal_package()
+
+    # Plot bits used in history
+    bits_per_time = np.array([block.time_hist_fmt.n for block in emu.filter.blocks])
+    bits_per_value = np.array([block.value_hist_fmt.n for block in emu.filter.blocks])
+    plt.plot(np.arange(emu.filter.n), bits_per_time, label='time')
+    plt.plot(np.arange(emu.filter.n), bits_per_value, label='value')
+    plt.xlabel('Step Response #')
+    plt.ylabel('Bits')
+    plt.legend()
+    plt.savefig('history_bits.pdf')
+    plt.clf()
+
+    # Print information about DFF utilization
+    time_hist_dff = np.sum(bits_per_time)
+    value_hist_dff = np.sum(bits_per_value)
+    time_hist_orig = emu.filter.n * bits_per_time[0]
+    value_hist_orig = emu.filter.n * bits_per_value[0]
+    time_hist_pct = 100 * (time_hist_orig-time_hist_dff)/time_hist_orig
+    value_hist_pct = 100 * (value_hist_orig - value_hist_dff) / value_hist_orig
+    print('*** DFF utilization estimate ***')
+    print('Time hist DFFs: {} (non-opt: {}; {:0.1f}% lower)'.format(time_hist_dff, time_hist_orig, time_hist_pct))
+    print('Value hist DFFs: {} (non-opt: {}; {:0.1f}% lower)'.format(value_hist_dff, value_hist_orig, value_hist_pct))
+
+    # Plot bits used for PWL ROMs
+    bits_per_pulse = np.array([block.pwl_table.table_size_bits for block in emu.filter.blocks])
+    plt.plot(bits_per_pulse)
+    plt.xlabel('Step Response #')
+    plt.ylabel('ROM Bits')
+    plt.savefig('rom_bits.pdf')
+    plt.clf()
+
+    # Plot number of segments for PWLs
+    seg_per_pulse = np.array([block.pwl_table.pwl.n for block in emu.filter.blocks])
+    plt.plot(seg_per_pulse)
+    plt.xlabel('Step Response #')
+    plt.ylabel('PWL Segments')
+    plt.savefig('pwl_segments.pdf')
+    plt.clf()
+
+    # Plot number of segments for PWLs
+    data_width_per_pulse = np.array([block.pwl_table.offset_fmt.n+block.pwl_table.slope_fmt.n for block in emu.filter.blocks])
+    plt.plot(data_width_per_pulse)
+    plt.xlabel('Step Response #')
+    plt.ylabel('Data Width')
+    plt.savefig('pwl_data_width.pdf')
+    plt.clf()
+
+    # Plot step response
+    plt.plot(step_ext.t, step_ext.v)
+
+    for block in emu.filter.blocks:
+        pwl = block.pwl_table.pwl
+        t_eval = pwl.domain(plot_dt)
+        plt.plot(t_eval, pwl.eval(t_eval))
+    plt.xlabel('Time')
+    plt.ylabel('Value')
+    plt.savefig('step_resp.pdf')
+    plt.clf()
+
 def my_rshift(val, amt):
     if amt < 0:
         return val << (-amt)
@@ -47,7 +136,7 @@ class Emulation:
         step_orig = get_combined_step(db=db)
 
         # Trim step response based on accuracy settings
-        step_trim = step_orig.trim_settling(f_thresh=self.err.err_trunc, rewind=1e-9)
+        step_trim = step_orig.trim_settling(thresh=self.err.err_trunc)
 
         # Determine number of UIs required to ensure the full step response is covered
         num_ui = int(ceil(step_trim.t[-1] / (self.clk_tx.Tmin_intval * self.time_fmt.res))) + 1
@@ -76,6 +165,8 @@ class Emulation:
         self.filter.set_pulse_formats()
         self.filter.set_prod_formats(R=self.R, error_budget=self.err)
         self.filter.set_out_format()
+
+        return step_ext
 
     def write_filter_rom_files(self, dir='roms', prefix='filter_rom_', suffix='.mem'):
         self.filter_rom_names = [None]*self.filter.n
@@ -227,24 +318,6 @@ class Emulation:
         pack.add(VerilogTypedef(name='signal_t', width=self.filter.out_fmt.n, signed=True))
 
         pack.write_to_file(name + '.sv')
-
-class ErrorBudget:
-    def __init__(self,
-                 err_trunc = 0.01, # percent settling at which the step response is truncated
-                 err_pwl = 1e-4, # error due to approximation of a continuous waveform by segments
-                 err_offset = 1e-4, # error due to quantization of PWL offset
-                 err_slope = 1e-4, # error due to quantization of PWL slope
-                 err_time = 1e-4, # error due to quantization of input history time
-                 err_value = 1e-4, # error due to quantization of input history value
-                 err_out = 1e-4, # error due to representation of output
-    ):
-        self.err_trunc = err_trunc
-        self.err_pwl = err_pwl
-        self.err_offset = err_offset
-        self.err_slope = err_slope
-        self.err_time = err_time
-        self.err_value = err_value
-        self.err_out = err_out
 
 class PwlTable:
     def __init__(self, pwl, addr_fmt, addr_offset_intval):
@@ -582,58 +655,6 @@ def get_combined_step(db=-4, dt=1e-12, T=20e-9):
     step_eff = imp2step(imp=imp_eff, dt=dt)
 
     return Waveform(t=t, v=step_eff)
-
-def main(db=-4, plot_dt=1e-12):
-    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
-
-    err = ErrorBudget()
-    emu = Emulation(err=err)
-    emu.build_filter_chain(db=db)
-
-    emu.write_filter_rom_files()
-    emu.write_filter_package()
-
-    emu.write_time_package()
-    emu.write_signal_package()
-
-    # Plot bits used in history
-    bits_per_time = np.array([block.time_hist_fmt.n for block in emu.filter.blocks])
-    bits_per_value = np.array([block.value_hist_fmt.n for block in emu.filter.blocks])
-    plt.plot(np.arange(emu.filter.n), bits_per_time, label='time')
-    plt.plot(np.arange(emu.filter.n), bits_per_value, label='value')
-    plt.xlabel('Step Response #')
-    plt.ylabel('Bits')
-    plt.legend()
-    plt.savefig('history_bits.pdf')
-    plt.clf()
-
-    # Plot bits used for PWL ROMs
-    bits_per_pulse = np.array([block.pwl_table.table_size_bits for block in emu.filter.blocks])
-    plt.plot(bits_per_pulse)
-    plt.xlabel('Step Response #')
-    plt.ylabel('ROM Bits')
-    plt.savefig('rom_bits.pdf')
-    plt.clf()
-
-    # Plot number of segments for PWLs
-    seg_per_pulse = np.array([block.pwl_table.pwl.n for block in emu.filter.blocks])
-    plt.plot(seg_per_pulse)
-    plt.xlabel('Step Response #')
-    plt.ylabel('PWL Segments')
-    plt.savefig('pwl_segments.pdf')
-    plt.clf()
-
-    # Plot step response
-    # plt.plot(step_ext.t, step_ext.v)
-
-    for block in emu.filter.blocks:
-        pwl = block.pwl_table.pwl
-        t_eval = pwl.domain(plot_dt)
-        plt.plot(t_eval, pwl.eval(t_eval))
-    plt.xlabel('Time')
-    plt.ylabel('Value')
-    plt.savefig('step_resp.pdf')
-    plt.clf()
 
 if __name__=='__main__':
     main()

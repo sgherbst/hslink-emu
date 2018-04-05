@@ -51,26 +51,26 @@ class Waveform:
     def n(self):
         return len(self.t)
 
-    def trim_settling(self, s_thresh=0.01, f_thresh=0.01, rewind=0):
+    def find_stop_idx(self, thresh=0.01):
         # find settled value
         yss = self.v[-1]
 
-        # find start of step
-        idx_start = np.argmax(self.v >= (s_thresh * yss))
-        assert self.v[idx_start] >= (s_thresh * yss)
-
-        # rewind the desired amount
-        idx_rewind = int(round(rewind / self.dt))
-        idx_start = max(0, idx_start - idx_rewind)
-
         # find end of step
-        err = np.abs(self.v - yss) / yss
-        idx_stop = len(err) - 1 - np.argmax(err[::-1] > f_thresh)
-        assert err[idx_stop] > f_thresh
+        err = np.abs(self.v - yss)/yss
+        idx_stop = len(err) - 1 - np.argmax(err[::-1] > thresh)
+        assert err[idx_stop] > thresh
+        assert err[idx_stop + 1] <= thresh
 
-        t_new = self.t[idx_start:idx_stop + 1] - self.t[idx_start]
-        v_new = self.v[idx_start:idx_stop + 1]
+        return idx_stop
+
+    def trim_through_idx(self, idx_stop):
+        t_new = self.t[:idx_stop + 1]
+        v_new = self.v[:idx_stop + 1]
         return Waveform(t=t_new, v=v_new)
+
+    def trim_settling(self, thresh=0.01):
+        idx_stop = self.find_stop_idx(thresh=thresh)
+        return self.trim_through_idx(idx_stop=idx_stop)
 
     def extend(self, Tmax):
         # check if extension is necessary
