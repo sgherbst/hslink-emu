@@ -51,12 +51,13 @@ class Waveform:
     def n(self):
         return len(self.t)
 
-    def find_stop_idx(self, thresh=0.01):
-        # find settled value
-        yss = self.v[-1]
+    @property
+    def yss(self):
+        return self.v[-1]
 
+    def find_stop_idx(self, thresh=0.01):
         # find end of step
-        err = np.abs(self.v - yss)/yss
+        err = np.abs(self.v - self.yss)/self.yss
         idx_stop = len(err) - 1 - np.argmax(err[::-1] > thresh)
         assert err[idx_stop] > thresh
         assert err[idx_stop + 1] <= thresh

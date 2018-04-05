@@ -12,15 +12,18 @@ from msemu.ctle import get_ctle_imp
 from msemu.verilog import VerilogPackage, DefineVariable, VerilogTypedef
 
 class ErrorBudget:
+    # all errors are in percent, relative to the steady-state value of the step response
+
     def __init__(self,
-                 err_trunc = 0.01, # residual settling error (%)
-                 err_pwl = 1e-4, # error due to approximation of a continuous waveform by segments
-                 err_offset = 1e-4, # error due to quantization of PWL offset
-                 err_slope = 1e-4, # error due to quantization of PWL slope
-                 err_time = 1e-4, # error due to quantization of input history time
-                 err_value = 1e-4, # error due to quantization of input history value
-                 err_out = 1e-4, # error due to representation of output
+                 err_trunc = 1e-2, # residual settling error
+                 err_pwl = 1e-3, # pwl approximation error
+                 err_offset = 1e-3, # PWL offset quantization error
+                 err_slope = 1e-3, # PWL slope quantization error
+                 err_time = 1e-3, # Time quantization error
+                 err_value = 1e-3, # Value quantization error
+                 err_out = 1e-4, # Output quantization error
     ):
+
         self.err_trunc = err_trunc
         self.err_pwl = err_pwl
         self.err_offset = err_offset
@@ -41,28 +44,6 @@ def main(db=-4, plot_dt=1e-12):
 
     emu.write_time_package()
     emu.write_signal_package()
-
-    # Plot bits used in history
-    bits_per_time = np.array([block.time_hist_fmt.n for block in emu.filter.blocks])
-    bits_per_value = np.array([block.value_hist_fmt.n for block in emu.filter.blocks])
-    plt.plot(np.arange(emu.filter.n), bits_per_time, label='time')
-    plt.plot(np.arange(emu.filter.n), bits_per_value, label='value')
-    plt.xlabel('Step Response #')
-    plt.ylabel('Bits')
-    plt.legend()
-    plt.savefig('history_bits.pdf')
-    plt.clf()
-
-    # Print information about DFF utilization
-    time_hist_dff = np.sum(bits_per_time)
-    value_hist_dff = np.sum(bits_per_value)
-    time_hist_orig = emu.filter.n * bits_per_time[0]
-    value_hist_orig = emu.filter.n * bits_per_value[0]
-    time_hist_pct = 100 * (time_hist_orig-time_hist_dff)/time_hist_orig
-    value_hist_pct = 100 * (value_hist_orig - value_hist_dff) / value_hist_orig
-    print('*** DFF utilization estimate ***')
-    print('Time hist DFFs: {} (non-opt: {}; {:0.1f}% lower)'.format(time_hist_dff, time_hist_orig, time_hist_pct))
-    print('Value hist DFFs: {} (non-opt: {}; {:0.1f}% lower)'.format(value_hist_dff, value_hist_orig, value_hist_pct))
 
     # Plot bits used for PWL ROMs
     bits_per_pulse = np.array([block.pwl_table.table_size_bits for block in emu.filter.blocks])
@@ -111,21 +92,21 @@ class Emulation:
                  err, # error budget
                  Tstop = 4e-9, # stopping time of emulation
                  Fnom = 8e9, # nominal TX frequency
-                 jitter = 10e-12, # peak-to-peak jitter of TX
+                 jitter_pkpk = 10e-12, # peak-to-peak jitter of TX
                  R = 1, # input range
                  t_res = 1e-14 # smallest time resolution represented
     ):
         self.err = err
         self.Tstop = Tstop
         self.Fnom = Fnom
-        self.jitter = jitter
+        self.jitter_pkpk = jitter_pkpk
         self.R = R
         self.t_res = t_res
 
         # Compute time format
-        self.time_fmt = FixedUnsigned.get_format(self.Tstop, res=self.t_res)
-        self.clk_tx = ClockWithJitter(freq=self.Fnom, jitter=self.jitter, time_fmt=self.time_fmt)
-        self.clk_rx = ClockWithJitter(freq=self.Fnom, jitter=self.jitter, time_fmt=self.time_fmt, phases=2)
+        self.time_fmt = FixedUnsigned.make_fixed_unsigned(self.Tstop, res=self.t_res)
+        self.clk_tx = ClockWithJitter(freq=self.Fnom, jitter_pkpk=self.jitter_pkpk, time_fmt=self.time_fmt)
+        self.clk_rx = ClockWithJitter(freq=self.Fnom, jitter_pkpk=self.jitter_pkpk, time_fmt=self.time_fmt, phases=2)
 
         # Placeholders
         self.dco = None
@@ -136,37 +117,34 @@ class Emulation:
         step_orig = get_combined_step(db=db)
 
         # Trim step response based on accuracy settings
-        step_trim = step_orig.trim_settling(thresh=self.err.err_trunc)
+        # This will be used as the step response going forward
+        self.step = step_orig.trim_settling(thresh=self.err.err_trunc)
 
         # Determine number of UIs required to ensure the full step response is covered
-        num_ui = int(ceil(step_trim.t[-1] / (self.clk_tx.Tmin_intval * self.time_fmt.res))) + 1
-
-        # Extend step response so that it can be evaluated anywhere where needed
-        step_ext = step_trim.extend(Tmax=2 * (num_ui * self.clk_tx.Tmax_intval) * self.time_fmt.res)
+        num_ui = int(ceil(self.step.t[-1] / self.clk_tx.Tmin)) + 1
+        assert (num_ui-1)*self.clk_tx.Tmin >= self.step.t[-1]
 
         # Build up a list of filter blocks
         self.filter = FilterChain(num_ui)
 
         # Build the PWL tables
         self.filter.build_pwl_tables(Tmin_intval=self.clk_tx.Tmin_intval, Tmax_intval=self.clk_tx.Tmax_intval,
-                                     wave=step_ext, time_fmt=self.time_fmt, error_budget=self.err)
+                                     wave=self.step, time_fmt=self.time_fmt, error_budget=self.err)
         self.filter.set_rom_formats(error_budget=self.err)
 
-        # Determine the time formats along the filter chain
-        T_diff_max_intval = (num_ui + 1) * self.clk_tx.Tmax_intval
-        self.filter.set_time_formats(T_diff_max_intval=T_diff_max_intval, time_fmt=self.time_fmt,
-                                      error_budget=self.err)
+        # Set time resolution
+        T_diff_max_intval = num_ui * self.clk_tx.Tmax_intval
+        self.filter.set_time_format(T_diff_max_intval=T_diff_max_intval, time_fmt=self.time_fmt,
+                                    error_budget=self.err)
 
         # Determine the value formats along the chain
-        self.filter.set_value_formats(R=self.R, error_budget=self.err)
+        self.filter.set_value_format(R=self.R, error_budget=self.err)
 
         # Set the format of pulse bias
         self.filter.set_pulse_bias_formats()
         self.filter.set_pulse_formats()
         self.filter.set_prod_formats(R=self.R, error_budget=self.err)
         self.filter.set_out_format()
-
-        return step_ext
 
     def write_filter_rom_files(self, dir='roms', prefix='filter_rom_', suffix='.mem'):
         self.filter_rom_names = [None]*self.filter.n
@@ -402,13 +380,16 @@ class PwlTable:
             self.slope_intvals[k] = self.slope_fmt.float2fixed(self.pwl.slopes[k])
 
 class ClockWithJitter:
-    def __init__(self, freq, jitter, time_fmt, phases=1):
+    def __init__(self, freq, jitter_pkpk, time_fmt, phases=1):
+        # save time format
+        self.time_fmt = time_fmt
+
         # compute jitter format
-        max_jitter_intval = time_fmt.float2fixed(jitter, mode='round')
+        max_jitter_intval = time_fmt.float2fixed(jitter_pkpk, mode='round')
         self.jitter_fmt = FixedUnsigned(n=Unsigned.get_bits(max_jitter_intval), point=time_fmt.point)
 
         # compute main time format
-        offset = (1/(phases*freq)) - (jitter/2)
+        offset = (1/(phases*freq)) - (jitter_pkpk/2)
         self.offset_intval = time_fmt.float2fixed(offset, mode='round')
 
         # make sure the jitter isn't too large
@@ -421,6 +402,14 @@ class ClockWithJitter:
     @property
     def Tmax_intval(self):
         return self.offset_intval + self.jitter_fmt.max
+
+    @property
+    def Tmin(self):
+        return self.Tmin_intval * self.time_fmt.res
+
+    @property
+    def Tmax(self):
+        return self.Tmax_intval * self.time_fmt.res
 
 class FilterBlock:
     def __init__(self):
