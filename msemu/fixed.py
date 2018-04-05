@@ -142,28 +142,59 @@ class Fixed:
         self.point_fmt = point_fmt
         self.width_fmt = width_fmt
 
-    def mul(self, other, width_cls):
+    def signed(self):
+        point_fmt = PointFormat(self.point_fmt.point)
+
+        intvals = [self.width_fmt.min,
+                   self.width_fmt.max]
+        width_fmt = Signed.make(intvals)
+
+        return Fixed(point_fmt=point_fmt, width_fmt=width_fmt)
+
+    def get_width_cls(self, other):
+        if isinstance(self.width_fmt, Unsigned) and isinstance(other.width_fmt, Unsigned):
+            return Unsigned
+        elif isinstance(self.width_fmt, Signed) and isinstance(other.width_fmt, Signed):
+            return Signed
+        else:
+            raise ValueError('Signedness must match.')
+
+    def __mul__(self, other):
         point_fmt = PointFormat(self.point_fmt.point+other.point_fmt.point)
 
         intvals = [self.width_fmt.min * other.width_fmt.min,
                    self.width_fmt.min * other.width_fmt.max,
                    self.width_fmt.max * other.width_fmt.min,
                    self.width_fmt.max * other.width_fmt.max]
-        width_fmt = width_cls.make(intvals)
+        width_fmt = self.get_width_cls(other).make(intvals)
 
         return Fixed(point_fmt=point_fmt, width_fmt=width_fmt)
 
-    def add(self, other, width_cls):
+    def __add__(self, other):
         assert self.point_fmt.point == other.point_fmt.point, "Points must be aligned"
         point_fmt = PointFormat(self.point_fmt.point)
 
         intvals = [self.width_fmt.min + other.width_fmt.min,
                    self.width_fmt.max + other.width_fmt.max]
-        width_fmt = width_cls.make(intvals)
+        width_fmt = self.get_width_cls(other).make(intvals)
 
         return Fixed(point_fmt=point_fmt, width_fmt=width_fmt)
 
-    def align_to(self, point, width_cls):
+    def __neg__(self):
+        assert isinstance(self.width_fmt, Signed), "Value must be signed to negate."
+
+        point_fmt = PointFormat(self.point_fmt.point)
+
+        intvals = [-self.width_fmt.min,
+                   -self.width_fmt.max]
+        width_fmt = Signed.make(intvals)
+
+        return Fixed(point_fmt=point_fmt, width_fmt=width_fmt)
+
+    def __sub__(self, other):
+        return self + (-other)
+
+    def align_to(self, point):
         point_fmt = PointFormat(point)
 
         if self.point_fmt.point >= point:
@@ -175,9 +206,12 @@ class Fixed:
             intvals = [self.width_fmt.min << lshift,
                        self.width_fmt.max << lshift]
 
-        width_fmt = width_cls.make(intvals)
-
-        return Fixed(point_fmt = point_fmt, width_fmt = width_fmt)
+        if isinstance(self.width_fmt, Unsigned):
+            return Fixed(point_fmt=point_fmt, width_fmt=Unsigned.make(intvals))
+        elif isinstance(self.width_fmt, Signed):
+            return Fixed(point_fmt=point_fmt, width_fmt=Signed.make(intvals))
+        else:
+            raise Exception('Invalid signedness.')
 
     def intval(self, val, func=None):
         intval = self.point_fmt.intval(val=val, func=func)
@@ -228,14 +262,16 @@ def main():
     print(fmt1.bin_str(-0.456))
 
     fmt2 = Fixed.make(7.89, 0.0001, Unsigned)
+    print(fmt2.n, fmt2.signed().n)
+    fmt2 = fmt2.signed()
 
-    fmt3 = fmt1.add(fmt2, Signed)
+    fmt3 = fmt1 + fmt2
     print(fmt3.n, fmt3.point, fmt3.min_float, fmt3.max_float)
 
-    fmt4 = fmt1.mul(fmt2, Signed)
+    fmt4 = fmt1 * fmt2
     print(fmt4.n, fmt4.point, fmt4.min_float, fmt4.max_float)
 
-    fmt5 = fmt4.align_to(PointFormat.res2point(0.1), Signed)
+    fmt5 = fmt4.align_to(PointFormat.res2point(0.1))
     print(fmt5.n, fmt5.point, fmt5.min_float, fmt5.max_float)
 
 if __name__=='__main__':

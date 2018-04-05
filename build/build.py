@@ -7,7 +7,7 @@ import os.path
 
 from msemu.rf import get_sample_s4p, s4p_to_impulse, imp2step
 from msemu.pwl import Waveform
-from msemu.fixed import FixedWithWidth
+from msemu.fixed import Fixed, Signed, Unsigned
 from msemu.ctle import get_ctle_imp
 from msemu.verilog import VerilogPackage, DefineVariable, VerilogTypedef
 
@@ -81,12 +81,6 @@ def main(db=-4, plot_dt=1e-12):
     plt.savefig('step_resp.pdf')
     plt.clf()
 
-def my_rshift(val, amt):
-    if amt < 0:
-        return val << (-amt)
-    else:
-        return val >> amt
-
 class Emulation:
     def __init__(self,
                  err, # error budget
@@ -104,7 +98,7 @@ class Emulation:
         self.t_res = t_res
 
         # Compute time format
-        self.time_fmt = FixedUnsigned.make_fixed_unsigned(self.Tstop, res=self.t_res)
+        self.time_fmt = Fixed.make(self.Tstop, self.t_res, Unsigned)
         self.clk_tx = ClockWithJitter(freq=self.Fnom, jitter_pkpk=self.jitter_pkpk, time_fmt=self.time_fmt)
         self.clk_rx = ClockWithJitter(freq=self.Fnom, jitter_pkpk=self.jitter_pkpk, time_fmt=self.time_fmt, phases=2)
 
@@ -128,8 +122,7 @@ class Emulation:
         self.filter = FilterChain(num_ui)
 
         # Build the PWL tables
-        self.filter.build_pwl_tables(Tmin_intval=self.clk_tx.Tmin_intval, Tmax_intval=self.clk_tx.Tmax_intval,
-                                     wave=self.step, time_fmt=self.time_fmt, error_budget=self.err)
+        self.filter.build_pwl_tables(clk=self.clk_tx, wave=self.step, time_fmt=self.time_fmt, error_budget=self.err)
         self.filter.set_rom_formats(error_budget=self.err)
 
         # Set time resolution
