@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 
-import time_settings::*;
-import signal_settings::*;
+import time_package::*;
+import signal_package::*;
 
 module dut(
     input wire SYSCLK_P,
@@ -24,19 +24,19 @@ module dut(
     clkgate clkgate_i(.clk(clk_orig), .gated(clk_sys), .en(1'b1));
     
     // create TX clock
-    const_clock #(.inc(TX_INC)) tx_clk_i(.clk_orig(clk_orig), .clk_sys(clk_sys), .time_next(time_next), .time_clock(time_in[0]), .clk_out(clk_tx), .time_eq(time_eq_tx));
+    const_clock #(.INC(TX_INC), .TIME_WIDTH(TIME_WIDTH)) tx_clk_i(.clk_orig(clk_orig), .clk_sys(clk_sys), .time_next(time_next), .time_clock(time_in[0]), .clk_out(clk_tx), .time_eq(time_eq_tx));
 
     // create random data generator
     prbs prbs_i(.clk(clk_tx), .out(out_tx));
 
     // drive data into channel
-    tx_driver tx_drv_i(.in(out_tx), .out(sig_tx), .clk(clk_tx));
+    tx_driver #(.width(FILTER_IN_WIDTH), .point(FILTER_IN_POINT)) tx_drv_i(.in(out_tx), .out(sig_tx), .clk(clk_tx));
 
     // filter data stream according to channel + CTLE dynamics
     filter filter_i(.in(sig_tx), .clk_in(clk_tx), .time_eq_in(time_eq_tx), .out(sig_rx_filter), .clk_sys(clk_sys), .time_next(time_next));
 
     // create RX clock
-    const_clock #(.N(2), .inc(RX_INC)) rx_clk_i(.clk_orig(clk_orig), .clk_sys(clk_sys), .time_next(time_next), .time_clock(time_in[1]), .clk_out(clk_rx), .time_eq(time_eq_rx));
+    const_clock #(.N(2), .INC(RX_INC), .TIME_WIDTH(TIME_WIDTH)) rx_clk_i(.clk_orig(clk_orig), .clk_sys(clk_sys), .time_next(time_next), .time_clock(time_in[1]), .clk_out(clk_rx), .time_eq(time_eq_rx));
 
     // create time manager
     time_manager #(.N(2)) tm(.time_in(time_in), .time_next(time_next), .time_curr(time_curr), .clk_sys(clk_sys));

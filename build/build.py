@@ -263,6 +263,7 @@ class Emulation:
 
         pack.add(VerilogConstant(name='TX_INC', value=self.clk_tx.T_nom_int, kind='longint'))
         pack.add(VerilogConstant(name='RX_INC', value=self.clk_rx.T_nom_int, kind='longint'))
+        pack.add(VerilogConstant(name='TIME_STOP', value=self.time_fmt.intval(self.Tstop), kind='longint'))
 
         self.time_package = pack
 

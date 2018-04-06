@@ -1,8 +1,8 @@
 `timescale 1ns/1ps
 
-import signal_settings::*;
-import time_settings::*;
-import filter_settings::*;
+import signal_package::*;
+import time_package::*;
+import filter_package::*;
 
 module filter (
     input FILTER_IN_FORMAT in,
@@ -35,15 +35,15 @@ module filter (
     endgenerate
          
     // generate filter blocks, pulse responses, and products
-    logic DT_FORMAT pwl_in [NUM_UI];
-    logic signed [FILTER_STEP_WIDTH-1:0] steps [NUM_UI];
-    logic signed [FILTER_PULSE_WIDTH-1:0] pulses [NUM_UI];
-    logic signed [FILTER_PROD_WIDTH-1:0] prods [NUM_UI];
+    DT_FORMAT pwl_in [NUM_UI];
+    FILTER_STEP_FORMAT steps [NUM_UI];
+    FILTER_PULSE_FORMAT pulses [NUM_UI];
+    FILTER_PROD_FORMAT prods [NUM_UI];
 
     generate
         for (k = 0; k < NUM_UI-1; k = k+1) begin : gen_pwl_blocks
             // PWL input time
-            assign pwl_in[k] = time_next - time_hist[k]
+            assign pwl_in[k] = time_next - time_hist[k];
             
             // PWL instantiation
             pwl #(.rom_name(FILTER_ROM_NAMES[k]),
@@ -67,7 +67,7 @@ module filter (
             end
 
             // products
-            mymult #(.a_bits(FILTER_PULSE_WIDTH)
+            mymult #(.a_bits(FILTER_PULSE_WIDTH),
                      .a_point(FILTER_PULSE_POINT),
                      .b_bits(FILTER_IN_WIDTH),
                      .b_point(FILTER_IN_POINT),
