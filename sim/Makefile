@@ -1,5 +1,7 @@
 # Makefile for running simulation
 
+PYTHON := python3
+
 BUILD_DIR := ../build/
 SHARED_DIR := ../shared/
 CPU_DIR := ../cpu/
@@ -16,6 +18,9 @@ OTHER_OPTS := +libext+.sv +nctimescale+1ns/1ps -sv +nc64bit -profile +ncaccess+r
 
 sim:
 	$(NCVERILOG) $(PACKAGES) $(TOP) $(LIBS) $(INCS) $(OTHER_OPTS) $(TCL_CMD)
+
+check:
+	$(PYTHON) check.py
 
 clean:
 	@rm -rf INCA_libs waves.shm .simvision

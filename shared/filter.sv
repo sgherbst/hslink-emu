@@ -41,7 +41,7 @@ module filter (
     FILTER_PROD_FORMAT prods [NUM_UI];
 
     generate
-        for (k = 0; k < NUM_UI-1; k = k+1) begin : gen_pwl_blocks
+        for (k=0; k<NUM_UI; k=k+1) begin : gen_pwl_blocks
             // PWL input time
             assign pwl_in[k] = time_next - time_hist[k];
             
