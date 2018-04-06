@@ -34,7 +34,7 @@ module filter (
         end
     endgenerate
          
-    // generate filter blocks, pulse responses, and products
+    // generate pwl tables, pulse responses, and products
     DT_FORMAT pwl_in [NUM_UI];
     FILTER_STEP_FORMAT steps [NUM_UI];
     FILTER_PULSE_FORMAT pulses [NUM_UI];

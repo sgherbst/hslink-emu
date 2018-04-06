@@ -24,4 +24,4 @@ check:
 
 clean:
 	@rm -rf INCA_libs waves.shm .simvision
-	@rm -f ncverilog.history tx.txt rxp.txt rxn.txt ncsim.log ncverilog.log
+	@rm -f ncverilog.history tx.txt rxp.txt rxn.txt ncsim.log ncverilog.log ncprof.out shm.prof
