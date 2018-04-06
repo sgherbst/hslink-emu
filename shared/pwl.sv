@@ -1,57 +1,62 @@
 `timescale 1ns/1ps
 
 module pwl #(
-    parameter pwl_addr_bits=1,
-    parameter pwl_data_bits=1,
-    parameter pwl_low_bits=1,
-    parameter table_addr_bits=1,
-    parameter offset_bits=1,
-    parameter slope_bits=1,
-    parameter slope_res_bits=1,
-    parameter t_res_bits=1,
-    parameter v_res_bits=1
+    parameter rom_name = "rom.mem",
+    parameter in_width = 1,
+    parameter in_point = 1,
+    parameter addr_width = 1,
+    parameter addr_offset = 1,
+    parameter segment_width = 1,
+    parameter offset_width = 1,
+    parameter bias_val = 1,
+    parameter slope_width = 1,
+    parameter slope_point = 1
+    parameter out_width = 1,
+    parameter out_point = 1
 )(
-    input [pwl_addr_bits-1:0] t,
-    output [pwl_data_bits-1:0] v,
-    output [table_addr_bits-1:0] addr_to_rom,
-    input [offset_bits+slope_bits-1:0] data_from_rom,
+    input [in_width-1:0] in,
+    output signed [out_width-1:0] out,
     input clk
 );
-    localparam prod_width = slope_bits+pwl_low_bits+1; // extra bit to account for unsigned-to-signed conversion of low_addr_bits
-    localparam shift_amount = slope_res_bits + t_res_bits - v_res_bits;
-    localparam shift_width = prod_width - shift_amount;
+    // local parameters defined for convenience
+    localparam rom_data_width = offset_width+slope_width;
+    localparam in_diff_width = segment_width+addr_width;
+    localparam prod_width = segment_width + slope_width + 1; // extra bit added to account for making segment signed
+    
+    // instantiate the rom
+    wire [addr_width-1:0] rom_addr;
+    wire [rom_data_width-1:0] rom_data;
+    myrom #(.addr_bits(addr_width),
+            .data_bits(rom_data_width),
+            .filename(rom_name)) myrom_i(.addr(rom_addr), .dout(rom_data), .clk(clk));
 
-    wire [table_addr_bits-1:0] mid_addr_bits = t[table_addr_bits+pwl_low_bits-1:pwl_low_bits];
-    wire [pwl_low_bits-1:0] low_addr_bits = t[pwl_low_bits-1:0];
+    // calculate rom addr
+    wire [in_diff_width-1:0] in_diff = in - addr_offset;
+    assign rom_addr = in_diff[in_diff_width-1:segment_width]
 
-    // add logic to deal with out-of-range address if necessary
-    generate
-        if (pwl_addr_bits > (table_addr_bits+pwl_low_bits)) begin
-            wire [pwl_addr_bits-table_addr_bits-pwl_low_bits-1:0] top_addr_bits = t[pwl_addr_bits-1:table_addr_bits+pwl_low_bits];
-            wire out_of_range = |top_addr_bits;
-            assign addr_to_rom = (out_of_range == 1'b1) ? {table_addr_bits{1'b1}}: t[table_addr_bits+pwl_low_bits-1:pwl_low_bits];
-        end else if (pwl_addr_bits == (table_addr_bits+pwl_low_bits)) begin
-            assign addr_to_rom = t[pwl_addr_bits-1:pwl_low_bits];
-        end else begin
-            assign addr_to_rom = {{(table_addr_bits-(pwl_addr_bits-pwl_low_bits)){1'b0}}, t[pwl_addr_bits-1:pwl_low_bits]};
-        end
-    endgenerate
-
-    // interpretation of memory contents as signed offset and slope
-    wire signed [offset_bits-1:0] offset = $signed(data_from_rom[offset_bits+slope_bits-1:slope_bits]);
-    wire signed [slope_bits-1:0] slope = $signed(data_from_rom[slope_bits-1:0]);
-
-    // delay low_addr_bits to match latency of synchronous ROM
-    reg [pwl_low_bits-1:0] low_addr_bits_d;
+    // calculate length along segment
+    // it is stored with a latency of one clock cycle
+    // to match the rom latency
+    reg [segment_width-1:0] segment = 1'b0;
     always @(posedge clk) begin
-        low_addr_bits_d <= low_addr_bits;
+        segment <= in_diff[segment_width-1:0];
     end
 
-    // compute linear correction
-    wire signed [prod_width-1:0] prod = slope * $signed({1'b0, low_addr_bits_d}); 
-    wire signed [shift_width-1:0] shift = prod >>> shift_amount;
-    
-    // assign output as sum of linear correction and offset
-    assign v = offset+shift;
-endmodule
+    // interpretation of memory contents as signed offset and slope
+    wire signed [offset_width-1:0] offset = $signed(rom_data[offset_width+slope_width-1:slope_width]);
+    wire signed [slope_width-1:0] slope = $signed(rom_data[slope_width-1:0]);
 
+    // compute linear correction
+    wire signed [prod_width-1:0] prod;
+    mymult #(.a_bits(segment_width)
+             .a_point(in_point),
+             .b_bits(slope_width),
+             .b_point(slope_point),
+             .c_bits(prod_width),
+             .c_point(out_point)) my_mult_i (.a($signed({1'b0, segment})),
+                                             .b(slope),
+                                             .c(prod));
+  
+    // assign output as sum of linear correction, offset from ROM, and a bias value
+    assign out = offset + prod + bias_val;
+endmodule

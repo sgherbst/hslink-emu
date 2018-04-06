@@ -15,12 +15,12 @@ module const_clock #(
 );
 
     // calculate time increment representation
-    localparam INC_BITS = $clog2(1+inc);
+    localparam TIME_INC_BITS = $clog2(1+inc);
 
     // represent delta time
-    wire [INC_BITS-1:0] inc = INC;
+    wire [TIME_INC_BITS-1:0] inc = INC;
 
     // instantiate the clock
-    clock #(.N(N), .INC_BITS(INC_BITS)) clock_i(.clk_orig(clk_orig), .clk_sys(clk_sys), .time_next(time_next), .inc(inc), .time_clock(time_clock), .clk_out(clk_out), .time_eq(time_eq));
+    clock #(.N(N), .TIME_INC_BITS(TIME_INC_BITS)) clock_i(.clk_orig(clk_orig), .clk_sys(clk_sys), .time_next(time_next), .inc(inc), .time_clock(time_clock), .clk_out(clk_out), .time_eq(time_eq));
 
 endmodule

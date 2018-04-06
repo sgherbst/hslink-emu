@@ -1,10 +1,7 @@
 `timescale 1ns/1ps
 
-import time_settings::time_t;
-import time_settings::TX_INC;
-import time_settings::RX_INC;
-
-import signal_settings::signal_t;
+import time_settings::*;
+import signal_settings::*;
 
 module dut(
     input wire SYSCLK_P,
@@ -14,13 +11,13 @@ module dut(
     wire clk_orig;
     clkgen clkgen_i(.SYSCLK_P(SYSCLK_P), .SYSCLK_N(SYSCLK_N), .clk_orig(clk_orig));   
 
-    time_t time_in [0:1];
-    time_t time_curr;
-    time_t time_next;
+    TIME_FORMAT time_in [0:1];
+    TIME_FORMAT time_curr;
+    TIME_FORMAT time_next;
 
     wire out_tx, out_rx, clk_tx, clk_rx_p, clk_rx_n, time_eq_tx, time_eq_rx, up, dn;
-    signal_t sig_tx;
-    signal_t sig_rx;
+    FILTER_IN_FORMAT sig_tx;
+    FILTER_OUT_FORMAT sig_rx;
 
     // create system clock
     wire clk_sys;
@@ -45,9 +42,9 @@ module dut(
     time_manager #(.N(2)) tm(.time_in(time_in), .time_next(time_next), .time_curr(time_curr), .clk_sys(clk_sys));
 
     // monitor signals
-    adc #(.name("tx")) adc_tx(.clk(clk_tx), .time_curr(time_curr), .sig(sig_tx));
-    adc #(.name("rxp")) adc_rxp(.clk(clk_rx_p), .time_curr(time_curr), .sig(sig_rx));
-    adc #(.name("rxn")) adc_rxn(.clk(clk_rx_n), .time_curr(time_curr), .sig(sig_rx));
+    adc #(.name("tx"), .time_bits(TIME_WIDTH), .time_point(TIME_POINT), .sig_bits(FILTER_IN_WIDTH), .sig_point(FILTER_IN_POINT)) adc_tx(.clk(clk_tx), .time_curr(time_curr), .sig(sig_tx));
+    adc #(.name("rxp"), .time_bits(TIME_WIDTH), .time_point(TIME_POINT), .sig_bits(FILTER_OUT_WIDTH), .sig_point(FILTER_OUT_POINT)) adc_rxp(.clk(clk_rx_p), .time_curr(time_curr), .sig(sig_rx));
+    adc #(.name("rxn"), .time_bits(TIME_WIDTH), .time_point(TIME_POINT), .sig_bits(FILTER_OUT_WIDTH), .sig_point(FILTER_OUT_POINT)) adc_rxn(.clk(clk_rx_n), .time_curr(time_curr), .sig(sig_rx));
 
     // monitor time
     always @(posedge clk_sys) begin
