@@ -1,107 +1,107 @@
-from numpy import genfromtxt, convolve
+from numpy import genfromtxt
 import matplotlib.pyplot as plt
-import argparse
 import numpy as np
-from scipy.signal import lsim, impulse, tf2ss, fftconvolve
+from scipy.signal import fftconvolve
 from scipy.interpolate import interp1d
 from scipy.stats import describe
-from math import exp, log, ceil, floor, pi, log2, sqrt
-import subprocess
-from scipy.linalg import matrix_balance, svd, norm, expm
-from numpy.linalg import lstsq, solve, inv
-import cvxpy
+from math import floor
+
+from msemu.ctle import get_ctle_imp
+from msemu.rf import get_sample_s4p, s4p_to_impulse
+from msemu.pwl import Waveform
 
 class SimResult:
-    pass
+    def __init__(self, tx, rxp, rxn, imp, in_, out):
+        self.tx = tx
+        self.rxp = rxp
+        self.rxn = rxn
+        self.imp = imp
+        self.in_ = in_
+        self.out = out
 
-def eval_single(args):
-    # object to hold return data
-    retval = SimResult()
+def get_imp_eff(db=-4, dt=0.1e-12, T=20e-9):
+    s4p = get_sample_s4p()
+    t, imp_ch = s4p_to_impulse(s4p, dt, T)
+    _, imp_ctle = get_ctle_imp(dt, T, db=db)
+    imp_eff = fftconvolve(imp_ch, imp_ctle)[:len(t)] * dt
 
+    return Waveform(t=t, v=imp_eff)
+
+def eval():
     # read tx data
     data_tx = genfromtxt('tx.txt', delimiter=',')
     t_tx = data_tx[:, 0]
     v_tx = data_tx[1:, 1]
     v_tx = np.concatenate((v_tx, [v_tx[-1]]))
+    tx = Waveform(t=t_tx, v=v_tx)
     
     # read rxp data (positive clock edge sampling)
     data_rxp = genfromtxt('rxp.txt', delimiter=',')
-    retval.t_rxp = data_rxp[:, 0]
-    retval.v_rxp = data_rxp[:, 1]
+    rxp = Waveform(t=data_rxp[:, 0], v=data_rxp[:, 1])
     
     # read rxn data (negative clock edge sampling)
     data_rxn = genfromtxt('rxn.txt', delimiter=',')
-    retval.t_rxn = data_rxn[:, 0]
-    retval.v_rxn = data_rxn[:, 1]
+    rxn = Waveform(t=data_rxn[:, 0], v=data_rxn[:, 1])
 
-    # get step response of channel
-    t_ch, v_ch = get_rx_step(rx_preset=args.rx_preset)
+    # get impulse response of channel
+    imp = get_imp_eff()
 
-    # interpolate channel response and input waveform
-    dt = args.time_res
-    retval.t_ch_imp = np.arange(int(floor(t_ch[-1]/dt + 1)))*dt
-    retval.t_in_sim = np.arange(int(floor(t_tx[-1]/dt + 1)))*dt
+    # interpolate input to impulse response timebase
+    count = int(floor(tx.t[-1]/imp.dt))+1
+    assert (count-1)*imp.dt <= tx.t[-1]
+    assert count*imp.dt > tx.t[-1]
+    in_t = np.arange(count)*imp.dt
+    in_v = interp1d(tx.t, tx.v, kind='zero')(in_t)
 
     # simulate system response
-    retval.v_ch_stp = (interp1d(t_ch, v_ch)(retval.t_ch_imp))
-    retval.v_ch_imp = np.diff(retval.v_ch_stp)
-    retval.v_in_sim = interp1d(t_tx, v_tx, kind='zero')(retval.t_in_sim)
-    retval.v_out_sim = fftconvolve(retval.v_in_sim, retval.v_ch_imp)[:len(retval.t_in_sim)]
-    retval.t_out_sim = retval.t_in_sim
+    out_v = fftconvolve(in_v, imp.v)[:len(in_t)] * imp.dt
 
     # return waveforms
-    return retval
+    return SimResult(
+        tx = tx,
+        rxp = rxp,
+        rxn = rxn,
+        imp = imp,
+        in_ = Waveform(t=in_t, v=in_v),
+        out = Waveform(t=in_t, v=out_v)
+    )
 
-def measure_error_single(obj):
-    t_emu = np.concatenate((obj.t_rxn, obj.t_rxp))
-    v_emu = np.concatenate((obj.v_rxn, obj.v_rxp))
-    test_idx = t_emu <= obj.t_out_sim[-1]
+def measure_error(result):
+    t_emu = np.concatenate((result.rxn.t, result.rxp.t))
+    v_emu = np.concatenate((result.rxn.v, result.rxp.v))
+    test_idx = t_emu <= result.out.t[-1]
 
-    v_sim_interp = interp1d(obj.t_out_sim, obj.v_out_sim)(t_emu[test_idx])
+    v_sim_interp = interp1d(result.out.t, result.out.v)(t_emu[test_idx])
     err = v_emu[test_idx] - v_sim_interp
+
+    # compute percentage error
+    v_out_abs_max = np.max(np.abs(result.out.v))
+    plus_err = np.max(err)/v_out_abs_max
+    minus_err = np.min(err) / v_out_abs_max
+
+    print('error: {:+3f} / {:+3f} %'.format(plus_err*1e2, minus_err*1e2))
+    print('')
+    print('error statistics: ')
+    print(describe(err))
 
     return err
 
-def plot_single(obj):
-    print('Maximum absolute value of waveform:', np.max(np.abs(obj.v_out_sim)))
-
-    plt.step(obj.t_in_sim, obj.v_in_sim, '-k', where='post', label='in')
-    plt.plot(obj.t_rxp, obj.v_rxp, 'b*', label='rxp')
-    plt.plot(obj.t_rxn, obj.v_rxn, 'ro', label='rxn')
-    plt.plot(obj.t_out_sim, obj.v_out_sim, '-g', label='sim')
+def plot(result):
+    plt.step(result.in_.t, result.in_.v, '-k', where='post', label='in')
+    plt.plot(result.rxp.t, result.rxp.v, 'b*', label='rxp')
+    plt.plot(result.rxn.t, result.rxn.v, 'ro', label='rxn')
+    plt.plot(result.out.t, result.out.v, '-g', label='sim')
     plt.ylim(-1.25, 1.25)
     plt.legend(loc='lower right')
     plt.xlabel('time')
     plt.ylabel('value')
     plt.show()
 
-def run_wave(args):
-    # prepare simulation
-    # note that some of args are adjusted by this function
-    var_dict = prepare_sim(args)
-
-    # run simulation
-    run_sim('sys_test.sv', var_dict)
-
-    if args.run_mode.lower() in ['short']:
-        # parse results
-        obj = eval_single(args, var_dict)
-
-        err = measure_error_single(obj)
-
-        # plot results
-        if args.show:
-            print('error statistics: ')
-            print(describe(err))
-            plot_single(obj)
-
-        return err
-    
-    else:
-        return None
-
 def main():
-    pass
+    result = eval()
+
+    measure_error(result)
+    plot(result)
     
 if __name__=='__main__':
     main()
