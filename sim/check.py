@@ -5,6 +5,8 @@ from scipy.signal import fftconvolve
 from scipy.interpolate import interp1d
 from scipy.stats import describe
 from math import floor
+import os.path
+import sys
 
 from msemu.ctle import get_ctle_imp
 from msemu.rf import get_sample_s4p, s4p_to_impulse
@@ -19,13 +21,21 @@ class SimResult:
         self.in_ = in_
         self.out = out
 
-def get_imp_eff(db=-4, dt=0.1e-12, T=20e-9):
-    s4p = get_sample_s4p()
-    t, imp_ch = s4p_to_impulse(s4p, dt, T)
-    _, imp_ctle = get_ctle_imp(dt, T, db=db)
-    imp_eff = fftconvolve(imp_ch, imp_ctle)[:len(t)] * dt
+def get_imp_eff():
+    # get the exact step response used in the build script
+    import_path = os.path.dirname(os.path.abspath(__file__))
+    import_path = os.path.join(import_path, os.path.pardir, 'build')
+    import_path = os.path.abspath(import_path)
+    print(import_path)
+    sys.path.append(import_path)
+    from build import get_combined_step
 
-    return Waveform(t=t, v=imp_eff)
+    # compute the impulse response
+    step, _ = get_combined_step()
+    v_new = np.diff(step.v)/step.dt
+    t_new = step.t[:-1]    
+
+    return Waveform(t=t_new, v=v_new)
 
 def eval():
     # read tx data
