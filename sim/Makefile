@@ -12,6 +12,8 @@ INCS :=
 TCL_CMD := -input hdl.tcl
 OTHER_OPTS := +libext+.sv +nctimescale+1ns/1ps -sv +nc64bit -profile +ncaccess+rwc
 
+.PHONY: sim clean
+
 sim:
 	$(NCVERILOG) $(PACKAGES) $(TOP) $(LIBS) $(INCS) $(OTHER_OPTS) $(TCL_CMD)
 
