@@ -142,7 +142,20 @@ class Fixed:
         self.point_fmt = point_fmt
         self.width_fmt = width_fmt
 
+    @property
     def signed(self):
+        if isinstance(self.width_fmt, Signed):
+            return True
+        elif isinstance(self.width_fmt, Unsigned):
+            return False
+        else:
+            return ValueError('Invalid signedness.')
+
+    @property
+    def unsigned(self):
+        return not self.signed
+
+    def to_signed(self):
         point_fmt = PointFormat(self.point_fmt.point)
 
         intvals = [self.width_fmt.min,
@@ -152,9 +165,9 @@ class Fixed:
         return Fixed(point_fmt=point_fmt, width_fmt=width_fmt)
 
     def get_width_cls(self, other):
-        if isinstance(self.width_fmt, Unsigned) and isinstance(other.width_fmt, Unsigned):
+        if self.unsigned and other.unsigned:
             return Unsigned
-        elif isinstance(self.width_fmt, Signed) and isinstance(other.width_fmt, Signed):
+        elif self.signed and other.signed:
             return Signed
         else:
             raise ValueError('Signedness must match.')
@@ -170,7 +183,19 @@ class Fixed:
 
         return Fixed(point_fmt=point_fmt, width_fmt=width_fmt)
 
+    def __radd__(self, other):
+        # needed for sum function to work...
+        if other == 0:
+            return self.clone()
+        else:
+            return self.__add__(other)
+
     def __add__(self, other):
+        # needed for sum function to work...
+        if other == 0:
+            return self
+
+        # main code
         assert self.point_fmt.point == other.point_fmt.point, "Points must be aligned"
         point_fmt = PointFormat(self.point_fmt.point)
 
@@ -223,6 +248,12 @@ class Fixed:
         intval = self.intval(val=val, func=func)
         return self.width_fmt.bin_str(intval)
 
+    def clone(self):
+        if self.signed:
+            return Fixed(point_fmt=PointFormat(self.point), width_fmt=Signed(self.n))
+        else:
+            return Fixed(point_fmt=PointFormat(self.point), width_fmt=Unsigned(self.n))
+
     @property
     def n(self):
         return self.width_fmt.n
@@ -262,8 +293,8 @@ def main():
     print(fmt1.bin_str(-0.456))
 
     fmt2 = Fixed.make(7.89, 0.0001, Unsigned)
-    print(fmt2.n, fmt2.signed().n)
-    fmt2 = fmt2.signed()
+    print(fmt2.n, fmt2.to_signed().n)
+    fmt2 = fmt2.to_signed()
 
     fmt3 = fmt1 + fmt2
     print(fmt3.n, fmt3.point, fmt3.min_float, fmt3.max_float)
