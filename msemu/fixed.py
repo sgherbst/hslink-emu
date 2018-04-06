@@ -127,7 +127,7 @@ class PointFormat:
     def float2int(val, point, func):
         scaled = val/PointFormat.point2res(point)
 
-        intval = func(scaled)
+        intval = int(func(scaled))
         assert isinstance(intval, int), "Problem generating integer representation."
 
         return intval

@@ -55,39 +55,14 @@ class Waveform:
     def yss(self):
         return self.v[-1]
 
-    def find_stop_idx(self, thresh=0.01):
+    def find_settled_time(self, thresh=0.01):
         # find end of step
         err = np.abs(self.v - self.yss)/self.yss
-        idx_stop = len(err) - 1 - np.argmax(err[::-1] > thresh)
-        assert err[idx_stop] > thresh
-        assert err[idx_stop + 1] <= thresh
+        idx_settled = len(err) - 1 - np.argmax(err[::-1] > thresh)
+        assert err[idx_settled] > thresh
+        assert err[idx_settled + 1] <= thresh
 
-        return idx_stop
-
-    def trim_through_idx(self, idx_stop):
-        t_new = self.t[:idx_stop + 1]
-        v_new = self.v[:idx_stop + 1]
-        return Waveform(t=t_new, v=v_new)
-
-    def trim_settling(self, thresh=0.01):
-        idx_stop = self.find_stop_idx(thresh=thresh)
-        return self.trim_through_idx(idx_stop=idx_stop)
-
-    def extend(self, Tmax):
-        # check if extension is necessary
-        if Tmax <= self.t[-1]:
-            return Waveform(t=self.t, v=self.v)
-
-        # check if the step has to be extended
-        n_new = int(ceil(Tmax / self.dt)) + 1
-
-        # fill the end
-        t_ext = np.arange(self.n, n_new) * self.dt
-        v_ext = np.ones(n_new - self.n) * self.v[-1]
-
-        t_new = np.concatenate((self.t, t_ext))
-        v_new = np.concatenate((self.v, v_ext))
-        return Waveform(t=t_new, v=v_new)
+        return self.t[idx_settled]
 
     def make_pwl(self, times):
         # add one last point at the end

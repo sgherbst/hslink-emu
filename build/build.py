@@ -7,46 +7,46 @@ import os.path
 
 from msemu.rf import get_sample_s4p, s4p_to_impulse, imp2step
 from msemu.pwl import Waveform
-from msemu.fixed import Fixed, Signed, Unsigned
+from msemu.fixed import Fixed, Signed, Unsigned, PointFormat
 from msemu.ctle import get_ctle_imp
 from msemu.verilog import VerilogPackage, DefineVariable, VerilogTypedef
 
 class ErrorBudget:
-    # all errors are in percent, relative to the steady-state value of the step response
+    # all errors are normalized to a particular value:
+    # R_in: normalized to R_in
+    # R_out : normalized to R_out
+    # yss: normalized to yss
+    # R_in*yss: normalized to R_in*yss
 
     def __init__(self,
-                 err_trunc = 1e-2, # residual settling error
-                 err_pwl = 1e-3, # pwl approximation error
-                 err_offset = 1e-3, # PWL offset quantization error
-                 err_slope = 1e-3, # PWL slope quantization error
-                 err_time = 1e-3, # Time quantization error
-                 err_value = 1e-3, # Value quantization error
-                 err_out = 1e-4, # Output quantization error
+                 trunc = 1e-2, # residual settling error [yss]
+                 step = 1e-3, # error in step representation [yss]
+                 pulse = 1e-3, # error in pulse representation [yss]
+                 prod = 1e-3, # error in product of pulse response and input [R_in*yss]
+                 in_ = 1e-3, # error in representing the input [R_in]
+                 out = 1e-3, # error in representing the output [R_out]
     ):
-
-        self.err_trunc = err_trunc
-        self.err_pwl = err_pwl
-        self.err_offset = err_offset
-        self.err_slope = err_slope
-        self.err_time = err_time
-        self.err_value = err_value
-        self.err_out = err_out
+        self.trunc = trunc
+        self.step = step
+        self.pulse = pulse
+        self.prod = prod
+        self.in_ = in_
+        self.out = out
 
 def main(db=-4, plot_dt=1e-12):
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
     err = ErrorBudget()
-    emu = Emulation(err=err)
-    step_ext = emu.build_filter_chain(db=db)
+    emu = Emulation(db=db, err=err)
 
-    emu.write_filter_rom_files()
-    emu.write_filter_package()
-
-    emu.write_time_package()
-    emu.write_signal_package()
+    # emu.write_filter_rom_files()
+    # emu.write_filter_package()
+    #
+    # emu.write_time_package()
+    # emu.write_signal_package()
 
     # Plot bits used for PWL ROMs
-    bits_per_pulse = np.array([block.pwl_table.table_size_bits for block in emu.filter.blocks])
+    bits_per_pulse = np.array([filter_pwl_table.table_size_bits for filter_pwl_table in emu.filter_pwl_tables])
     plt.plot(bits_per_pulse)
     plt.xlabel('Step Response #')
     plt.ylabel('ROM Bits')
@@ -54,7 +54,7 @@ def main(db=-4, plot_dt=1e-12):
     plt.clf()
 
     # Plot number of segments for PWLs
-    seg_per_pulse = np.array([block.pwl_table.pwl.n for block in emu.filter.blocks])
+    seg_per_pulse = np.array([filter_pwl_table.pwl.n for filter_pwl_table in emu.filter_pwl_tables])
     plt.plot(seg_per_pulse)
     plt.xlabel('Step Response #')
     plt.ylabel('PWL Segments')
@@ -62,7 +62,7 @@ def main(db=-4, plot_dt=1e-12):
     plt.clf()
 
     # Plot number of segments for PWLs
-    data_width_per_pulse = np.array([block.pwl_table.offset_fmt.n+block.pwl_table.slope_fmt.n for block in emu.filter.blocks])
+    data_width_per_pulse = np.array([filter_pwl_table.offset_fmt.n+filter_pwl_table.slope_fmt.n for filter_pwl_table in emu.filter_pwl_tables])
     plt.plot(data_width_per_pulse)
     plt.xlabel('Step Response #')
     plt.ylabel('Data Width')
@@ -70,10 +70,10 @@ def main(db=-4, plot_dt=1e-12):
     plt.clf()
 
     # Plot step response
-    plt.plot(step_ext.t, step_ext.v)
+    plt.plot(emu.step.t, emu.step.v)
 
-    for block in emu.filter.blocks:
-        pwl = block.pwl_table.pwl
+    for filter_pwl_table in emu.filter_pwl_tables:
+        pwl = filter_pwl_table.pwl
         t_eval = pwl.domain(plot_dt)
         plt.plot(t_eval, pwl.eval(t_eval))
     plt.xlabel('Time')
@@ -84,66 +84,142 @@ def main(db=-4, plot_dt=1e-12):
 class Emulation:
     def __init__(self,
                  err, # error budget
+                 db = -4, # CTLE gain setting
                  Tstop = 4e-9, # stopping time of emulation
                  Fnom = 8e9, # nominal TX frequency
                  jitter_pkpk = 10e-12, # peak-to-peak jitter of TX
-                 R = 1, # input range
+                 R_in = 1, # input range
+                 R_out = 1, # output range
                  t_res = 1e-14 # smallest time resolution represented
     ):
         self.err = err
+        self.db = db
         self.Tstop = Tstop
         self.Fnom = Fnom
         self.jitter_pkpk = jitter_pkpk
-        self.R = R
+        self.R_in = R_in
+        self.R_out = R_out
         self.t_res = t_res
 
+        # Get the step response
+        self.compute_step()
+
         # Compute time format
-        self.time_fmt = Fixed.make(self.Tstop, self.t_res, Unsigned)
+        self.set_time_format()
+
+        # Determine clock representation
         self.clk_tx = ClockWithJitter(freq=self.Fnom, jitter_pkpk=self.jitter_pkpk, time_fmt=self.time_fmt)
         self.clk_rx = ClockWithJitter(freq=self.Fnom, jitter_pkpk=self.jitter_pkpk, time_fmt=self.time_fmt, phases=2)
 
-        # Placeholders
-        self.dco = None
-        self.filter = None
+        # Set points of several signals
+        self.set_io_formats()
+        self.set_common_points()
 
-    def build_filter_chain(self, db=-4):
-        # Compute step response of channel and CTLE
-        step_orig = get_combined_step(db=db)
-
-        # Trim step response based on accuracy settings
-        # This will be used as the step response going forward
-        self.step = step_orig.trim_settling(thresh=self.err.err_trunc)
-
-        # Determine number of UIs required to ensure the full step response is covered
-        num_ui = int(ceil(self.step.t[-1] / self.clk_tx.Tmin)) + 1
-        assert (num_ui-1)*self.clk_tx.Tmin >= self.step.t[-1]
+        # Determine the number of UIs
+        self.set_num_ui()
 
         # Build up a list of filter blocks
-        self.filter = FilterChain(num_ui)
+        self.create_filter_pwl_tables()
 
-        # Build the PWL tables
-        self.filter.build_pwl_tables(clk=self.clk_tx, wave=self.step, time_fmt=self.time_fmt, error_budget=self.err)
-        self.filter.set_rom_formats(error_budget=self.err)
+        # Set the widths of several signals
+        self.set_common_widths()
 
-        # Set time resolution
-        T_diff_max_intval = num_ui * self.clk_tx.Tmax_intval
-        self.filter.set_time_format(T_diff_max_intval=T_diff_max_intval, time_fmt=self.time_fmt,
-                                    error_budget=self.err)
+    def compute_step(self):
+        # Compute step response of channel and CTLE
+        self.step = get_combined_step(db=self.db)
 
-        # Determine the value formats along the chain
-        self.filter.set_value_format(R=self.R, error_budget=self.err)
+        # Find time at which step response has settled
+        self.settled_time = self.step.find_settled_time(thresh=self.err.trunc)
 
-        # Set the format of pulse bias
-        self.filter.set_pulse_bias_formats()
-        self.filter.set_pulse_formats()
-        self.filter.set_prod_formats(R=self.R, error_budget=self.err)
-        self.filter.set_out_format()
+    def set_time_format(self):
+        # the following are full formats, with associated widths
+        self.time_fmt = Fixed.make(self.Tstop, self.t_res, Unsigned)
+
+    def set_io_formats(self):
+        # the following are full formats, with associated widths
+        self.in_fmt = Fixed.make([-self.R_in, self.R_in], self.err.in_*self.R_in, Signed)
+        self.out_fmt = Fixed.make([-self.R_out, self.R_out], self.err.out*self.R_out, Signed)
+
+    def set_common_points(self):
+        self.step_point_fmt = PointFormat.make(self.err.step*self.step.yss)
+        self.pulse_point_fmt = PointFormat.make(self.err.pulse*self.step.yss)
+        self.prod_point_fmt = PointFormat.make(self.err.prod*self.step.yss*self.R_in)
+
+    def set_common_widths(self):
+        # bound the step responses
+        filter_pwl_out_fmts = [filter_pwl_table.out_fmt for filter_pwl_table in self.filter_pwl_tables]
+        self.step_fmt = max(filter_pwl_out_fmts, key = lambda out_fmt: out_fmt.n)
+
+        # bound the pulse responses
+        self.pulse_fmt = self.step_fmt - self.step_fmt
+
+        # bound the products
+        self.prod_fmt = self.in_fmt * self.pulse_fmt
+
+    def set_num_ui(self):
+        # Determine number of UIs required to ensure the full step response is covered
+        self.num_ui = int(ceil(self.settled_time / self.clk_tx.T_min_float)) + 1
+        assert (self.num_ui-1)*self.clk_tx.T_min_float >= self.settled_time
+        assert (self.num_ui-2)*self.clk_tx.T_min_float < self.settled_time
+
+        # create a list of PWL tables to be used
+        self.pwl_tables = [None]*self.num_ui
+
+        # Set the format for the time history in the filter
+        dt_max_int = self.num_ui * self.clk_tx.T_max_int
+        self.dt_fmt = Fixed(point_fmt=self.time_fmt.point_fmt, width_fmt=Unsigned.make(dt_max_int))
+
+    def create_filter_pwl_tables(self):
+        self.filter_pwl_tables = []
+        for k in range(self.num_ui):
+            filter_pwl_table = self.create_filter_pwl_table(k)
+            self.filter_pwl_tables.append(filter_pwl_table)
+
+    def create_filter_pwl_table(self, k, addr_bits_max=14):
+        # compute range of times at which PWL table will be evaluated
+        dt_start_int = k*self.clk_tx.T_min_int
+        dt_stop_int = (k+1)*self.clk_tx.T_max_int
+
+        # compute number of bits going into the PWL, after subtracting off dt_start_int
+        pwl_time_bits = Unsigned.width(dt_stop_int - dt_start_int)
+
+        # set tolerance for loop
+        tol = self.err.step * self.step.yss
+
+        # iterate over the number of ROM address bits
+        rom_addr_bits = 1
+        while (rom_addr_bits <= addr_bits_max) and (rom_addr_bits < pwl_time_bits):
+            # compute the pwl addr format
+            high_bits_fmt = Fixed(width_fmt=Unsigned(rom_addr_bits),
+                                  point_fmt=PointFormat(self.time_fmt.point - (pwl_time_bits - rom_addr_bits)))
+            low_bits_fmt = Fixed(width_fmt=Unsigned(pwl_time_bits - rom_addr_bits),
+                                 point_fmt=self.time_fmt.point_fmt)
+
+            # calculate a list of times for the segment start times
+            times = dt_start_int*self.time_fmt.res + (np.arange(high_bits_fmt.width_fmt.max+1)*high_bits_fmt.res)
+
+            # build pwl table
+            pwl = self.step.make_pwl(times=times)
+
+            if pwl.error <= tol:
+                return PwlTable(pwl=pwl, high_bits_fmt=high_bits_fmt, low_bits_fmt=low_bits_fmt,
+                                addr_offset_int=dt_start_int, out_point_fmt=self.step_point_fmt, tol=tol)
+
+            rom_addr_bits += 1
+        else:
+            raise Exception('Failed to find a suitable PWL representation.')
 
     def write_filter_rom_files(self, dir='roms', prefix='filter_rom_', suffix='.mem'):
-        self.filter_rom_names = [None]*self.filter.n
-        for k, block in enumerate(self.filter.blocks):
-            self.filter_rom_names[k] = prefix + str(k) + suffix
-            block.pwl_table.write_table(os.path.join(dir, self.filter_rom_names[k]))
+        self.filter_rom_names = []
+        for k, filter_pwl_table in enumerate(self.filter_pwl_tables):
+            # generate name
+            filter_rom_name = prefix + str(k) + suffix
+
+            # write to file
+            filter_pwl_table.write_table(os.path.join(dir, self.filter_rom_name))
+
+            # keep track of names
+            self.filter_rom_names.append(filter_rom_name)
 
     def write_filter_package(self, name='filter_settings'):
         pack = VerilogPackage(name=name)
@@ -291,53 +367,47 @@ class Emulation:
         pack.write_to_file(name + '.sv')
 
 class PwlTable:
-    def __init__(self, pwl, addr_fmt, addr_offset_intval):
+    def __init__(self, pwl, high_bits_fmt, low_bits_fmt, addr_offset_int, out_point_fmt, tol):
+        # save settings
         self.pwl = pwl
-        self.addr_fmt = addr_fmt
-        self.addr_offset_intval = addr_offset_intval
+        self.high_bits_fmt = high_bits_fmt
+        self.low_bits_fmt = low_bits_fmt
+        self.addr_offset_int = addr_offset_int
+        self.out_point_fmt = out_point_fmt
+        self.tol = tol
 
-        # leave these settings unitialized
-        self.offset_fmt = None
-        self.slope_fmt  = None
-        self.bias_intval = None
-        self.slope_intvals = None
-        self.offset_biased_intvals = None
+        # check input validity
+        assert np.isclose(self.high_bits_fmt.res, self.pwl.dtau)
 
-    def lin_corr_intval(self, slope_intval):
-        return my_rshift(slope_intval, self.addr_fmt.point + self.slope_fmt.point - self.offset_fmt.point)
+        # set up the format of the ROM
+        self.set_rom_fmt()
 
-    @property
-    def lin_corr_width(self):
-        lin_corr_intvals = [self.lin_corr_intval(slope_intval) for slope_intval in self.slope_intvals]
-        lin_corr_intval_min = min(lin_corr_intvals)
-        lin_corr_intval_max = max(lin_corr_intvals)
-        return Signed.get_bits([lin_corr_intval_min, lin_corr_intval_max])
+    def set_rom_fmt(self):
+        # determine the bias
+        bias_float = (min(self.pwl.offsets)+max(self.pwl.offsets))/2
+        self.bias_int = self.out_point_fmt.intval(bias_float)
+        self.bias_fmt = Fixed(point_fmt=self.out_point_fmt,
+                              width_fmt=Signed.make(self.bias_int))
 
-    @property
-    def output_width(self):
-        return Signed.get_bits([self.biased_intval_min(), self.biased_intval_max()])
+        # determine offset representation
+        offset_floats = [offset - bias_float for offset in self.pwl.offsets]
+        self.offset_ints = [self.out_point_fmt.intval(offset_float) for offset_float in offset_floats]
+        self.offset_fmt = Fixed(point_fmt=self.out_point_fmt,
+                                width_fmt=Signed.make(self.offset_ints))
 
-    @property
-    def last_point_intval(self):
-        return self.offset_biased_intvals[-1] + self.lin_corr_intval(self.slope_intvals[-1])
-
-    def biased_intval_min(self):
-        return min(self.offset_biased_intvals + [self.last_point_intval])
-
-    def biased_intval_max(self):
-        return max(self.offset_biased_intvals + [self.last_point_intval])
-
-    @property
-    def table_size_bits(self):
-        return self.pwl.n * (self.offset_fmt.n + self.slope_fmt.n)
+        # determine slope representation
+        slope_point_fmt = PointFormat.make(self.tol / self.low_bits_fmt.max_float)
+        self.slope_ints = [slope_point_fmt.intval(slope) for slope in self.pwl.slopes]
+        self.slope_fmt = Fixed(point_fmt=slope_point_fmt,
+                               width_fmt=Signed.make(self.slope_ints))
 
     def to_table_str(self):
         retval = ''
 
-        offset_binary = Binary(n=self.offset_fmt.n)
-        slope_binary = Binary(n=self.slope_fmt.n)
-        for offset_biased_intval, slope_intval in zip(self.offset_biased_intvals, self.slope_intvals):
-            retval += offset_binary.bin_str(offset_biased_intval) + slope_binary.bin_str(slope_intval) + '\n'
+        for offset_int, slope_int in zip(self.offset_ints, self.slope_ints):
+            retval += self.offset_fmt.width_fmt.bin_str(offset_int)
+            retval += self.slope_fmt.width_fmt.bin_str(slope_int)
+            retval += '\n'
 
         return retval
 
@@ -346,31 +416,15 @@ class PwlTable:
         with open(fname, 'w') as f:
             f.write(table_str)
 
-    def set_rom_fmt(self, error_budget):
-        # determine the offset format
-        offset_point = Fixed.res2point(error_budget.err_offset)
-        offset_min_intval = Fixed.intval(min(self.pwl.offsets), point=offset_point)
-        offset_max_intval = Fixed.intval(max(self.pwl.offsets), point=offset_point)
+    @property
+    def out_fmt(self):
+        return (self.bias_fmt
+                + self.offset_fmt
+                + (self.slope_fmt*self.low_bits_fmt.signed()).align_to(self.out_point_fmt.point))
 
-        # adjust using bias
-        self.bias_intval = (offset_min_intval + offset_max_intval) // 2
-        offset_min_intval -= self.bias_intval
-        offset_max_intval -= self.bias_intval
-
-        # create the offset format
-        offset_bits = Signed.get_bits([offset_min_intval, offset_max_intval])
-        self.offset_fmt = FixedSigned(n=offset_bits, point=offset_point)
-
-        # determine slope format
-        slope_range = [max(self.pwl.slopes), min(self.pwl.slopes)]
-        self.slope_fmt = FixedSigned.get_format(slope_range, error_budget.err_slope / self.pwl.dtau)
-
-        # generate fixed point data
-        self.offset_biased_intvals = [0]*self.pwl.n
-        self.slope_intvals = [0]*self.pwl.n
-        for k in range(self.pwl.n):
-            self.offset_biased_intvals[k] = self.offset_fmt.float2fixed(self.pwl.offsets[k]) - self.bias_intval
-            self.slope_intvals[k] = self.slope_fmt.float2fixed(self.pwl.slopes[k])
+    @property
+    def table_size_bits(self):
+        return self.pwl.n * (self.offset_fmt.n + self.slope_fmt.n)
 
 class ClockWithJitter:
     def __init__(self, freq, jitter_pkpk, time_fmt, phases=1):
@@ -378,31 +432,33 @@ class ClockWithJitter:
         self.time_fmt = time_fmt
 
         # compute jitter format
-        max_jitter_intval = time_fmt.float2fixed(jitter_pkpk, mode='round')
-        self.jitter_fmt = FixedUnsigned(n=Unsigned.get_bits(max_jitter_intval), point=time_fmt.point)
+        self.jitter_fmt = time_fmt.point_fmt.to_fixed([-jitter_pkpk/2, jitter_pkpk/2], Signed)
 
         # compute main time format
-        offset = (1/(phases*freq)) - (jitter_pkpk/2)
-        self.offset_intval = time_fmt.float2fixed(offset, mode='round')
+        self.T_nom_int = time_fmt.intval(1/(phases*freq))
 
         # make sure the jitter isn't too large
-        assert self.offset_intval > 0
+        assert self.T_nom_int + self.jitter_fmt.min_int > 0
 
     @property
-    def Tmin_intval(self):
-        return self.offset_intval + self.jitter_fmt.min
+    def T_nom_float(self):
+        return self.T_nom_int * self.time_fmt.res
 
     @property
-    def Tmax_intval(self):
-        return self.offset_intval + self.jitter_fmt.max
+    def T_min_int(self):
+        return self.T_nom_int + self.jitter_fmt.min_int
 
     @property
-    def Tmin(self):
-        return self.Tmin_intval * self.time_fmt.res
+    def T_max_int(self):
+        return self.T_nom_int + self.jitter_fmt.max_int
 
     @property
-    def Tmax(self):
-        return self.Tmax_intval * self.time_fmt.res
+    def T_min_float(self):
+        return self.T_min_int * self.time_fmt.res
+
+    @property
+    def T_max_float(self):
+        return self.T_max_int * self.time_fmt.res
 
 class FilterBlock:
     def __init__(self):
@@ -592,42 +648,6 @@ class FilterChain:
         self.out_fmt_width = Signed.get_bits([self.out_min_intval, self.out_max_intval])
         self.out_fmt = FixedSigned(n=self.out_fmt_width, point=self.out_fmt_point)
 
-def create_pwl_repr(wave, addr_bits, t_start_intval, t_stop_intval, time_fmt):
-    # calculate table step size
-    n_seg = 1 << addr_bits
-    addr_point = int(floor(time_fmt.point - log2((t_stop_intval - t_start_intval + 1) / (n_seg - 1))))
-    addr_fmt = FixedUnsigned(n=addr_bits, point=addr_point)
-
-    # calculate the start time of the segment
-    addr_offset_intval = t_start_intval >> (time_fmt.point - addr_fmt.point)
-
-    # make sure that the calculations are correct
-    assert time_fmt.point >= addr_fmt.point
-    int_fact = 1 << (time_fmt.point - addr_fmt.point)
-    assert t_start_intval >= addr_offset_intval * int_fact
-    assert t_stop_intval <= (addr_offset_intval + n_seg) * int_fact - 1
-
-    # calculate a list of times for the segment start times
-    times = (addr_offset_intval + np.arange(n_seg)) * addr_fmt.res
-
-    # build pwl table
-    pwl = wave.make_pwl(times=times)
-    return PwlTable(pwl=pwl, addr_fmt=addr_fmt, addr_offset_intval=addr_offset_intval)
-
-def find_pwl_repr(wave, t_start_intval, t_stop_intval, time_fmt, error_budget, addr_bits_max=14):
-    # loop over the number of address bits
-    addr_bits = 1
-
-    while addr_bits <= addr_bits_max:
-        pwl_table = create_pwl_repr(wave=wave, addr_bits=addr_bits, t_start_intval=t_start_intval,
-                                    t_stop_intval=t_stop_intval, time_fmt=time_fmt)
-
-        if pwl_table.pwl.error <= error_budget.err_pwl:
-            return pwl_table
-
-        addr_bits += 1
-    else:
-        raise Exception('Failed to find a suitable PWL representation.')
 
 def get_combined_step(db=-4, dt=1e-12, T=20e-9):
     s4p = get_sample_s4p()
