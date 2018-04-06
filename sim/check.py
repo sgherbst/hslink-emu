@@ -23,12 +23,12 @@ class SimResult:
 
 def get_imp_eff():
     # get the exact step response used in the build script
-    import_path = os.path.dirname(os.path.abspath(__file__))
+    import_path = os.path.dirname(os.path.realpath(__file__))
     import_path = os.path.join(import_path, os.path.pardir, 'build')
-    import_path = os.path.abspath(import_path)
+    import_path = os.path.realpath(import_path)
     print(import_path)
     sys.path.append(import_path)
-    from build import get_combined_step
+    from build.build import get_combined_step
 
     # compute the impulse response
     step, _ = get_combined_step()

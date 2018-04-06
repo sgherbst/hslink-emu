@@ -15,7 +15,7 @@ module mymult #(
     localparam prod_width = a_bits + b_bits;
     localparam rshift = a_point + b_point - c_point;    
 
-    wire [prod_width-1:0] prod = a*b;
+    wire signed [prod_width-1:0] prod = a*b;
 
     generate
         if (rshift >= 0) begin

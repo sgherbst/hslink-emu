@@ -59,4 +59,5 @@ module pwl #(
   
     // assign output as sum of linear correction, offset from ROM, and a bias value
     assign out = offset + prod + bias_val;
+//    assign out = offset + bias_val;
 endmodule

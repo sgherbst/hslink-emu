@@ -20,23 +20,21 @@ class ErrorBudget:
     # R_in*yss: normalized to R_in*yss
 
     def __init__(self,
-                 in_ = 1e-3,            # error in input quantization [R_in]
-                 trunc = 1e-2,          # residual settling error [yss]
-                 pwl = 1e-3,            # error in pwl segment representation [yss]
-                 step = 1e-3,           # error in step quantization [yss]
-                 prod = 1e-3            # error in product of pulse response and input quantization [R_in*yss]
+                 in_ = 1e-9,            # error in input quantization [R_in]
+                 pwl = 1e-4,            # error in pwl segment representation [yss]
+                 step = 1e-9,           # error in step quantization [yss]
+                 prod = 1e-9            # error in product of pulse response and input quantization [R_in*yss]
     ):
-        self.trunc = trunc
         self.pwl = pwl
         self.step = step
         self.prod = prod
         self.in_ = in_
 
-def main(db=-4, plot_dt=1e-12):
+def main(plot_dt=1e-12):
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
     err = ErrorBudget()
-    emu = Emulation(db=db, err=err)
+    emu = Emulation(err=err)
 
     emu.write_packages()
     emu.write_rom_files()
@@ -80,7 +78,6 @@ def main(db=-4, plot_dt=1e-12):
 class Emulation:
     def __init__(self,
                  err, # error budget
-                 db = -4, # CTLE gain setting
                  Tstop = 20e-9, # stopping time of emulation
                  Fnom = 8e9, # nominal TX frequency
                  jitter_pkpk = 10e-12, # peak-to-peak jitter of TX
@@ -88,7 +85,6 @@ class Emulation:
                  t_res = 1e-14 # smallest time resolution represented
     ):
         self.err = err
-        self.db = db
         self.Tstop = Tstop
         self.Fnom = Fnom
         self.jitter_pkpk = jitter_pkpk
@@ -96,7 +92,7 @@ class Emulation:
         self.t_res = t_res
 
         # Get the step response
-        self.compute_step()
+        self.step, self.settled_time = get_combined_step()
 
         # Compute time format
         self.set_time_format()
@@ -122,13 +118,6 @@ class Emulation:
         self.create_filter_package()
         self.create_time_package()
         self.create_signal_package()
-
-    def compute_step(self):
-        # Compute step response of channel and CTLE
-        self.step = get_combined_step(db=self.db)
-
-        # Find time at which step response has settled
-        self.settled_time = self.step.find_settled_time(thresh=self.err.trunc)
 
     def set_time_format(self):
         # the following are full formats, with associated widths
@@ -182,7 +171,7 @@ class Emulation:
             self.filter_rom_paths.append(os.path.join(self.rom_dir_path, filter_rom_file))
             self.filter_pwl_tables.append(filter_pwl_table)
 
-    def create_filter_pwl_table(self, k, addr_bits_max=14):
+    def create_filter_pwl_table(self, k, addr_bits_max=18):
         # compute range of times at which PWL table will be evaluated
         dt_start_int = k*self.clk_tx.T_min_int
         dt_stop_int = (k+1)*self.clk_tx.T_max_int
@@ -383,14 +372,32 @@ class ClockWithJitter:
     def T_max_float(self):
         return self.T_max_int * self.time_fmt.res
 
-def get_combined_step(db=-4, dt=1e-12, T=20e-9):
+def get_combined_step(db=-4, dt=0.1e-12, T=20e-9, err_trunc=1e-3):
+    # get channel impulse response
     s4p = get_sample_s4p()
     t, imp_ch = s4p_to_impulse(s4p, dt, T)
-    _, imp_ctle = get_ctle_imp(dt, T, db=db)
-    imp_eff = fftconvolve(imp_ch, imp_ctle)[:len(t)]*dt
-    step_eff = imp2step(imp=imp_eff, dt=dt)
 
-    return Waveform(t=t, v=step_eff)
+    # get ctle impulse response
+    _, imp_ctle = get_ctle_imp(dt, T, db=db)
+
+    # compute combined impulse response
+    imp_eff = fftconvolve(imp_ch, imp_ctle)[:len(t)]*dt
+    
+    # compute resulting step response
+    step = Waveform(t=t, v=imp2step(imp=imp_eff, dt=dt))
+    
+    # compute time at which waveform is settled
+    settled_time = step.find_settled_time(thresh=err_trunc)
+
+    # fill step response with settled value
+    v_new = step.v.copy()
+    v_new[step.t >= settled_time] = step.yss
+    step_new = Waveform(t=step.t, v=v_new)
+
+    print(step_new)
+    print(settled_time)
+
+    return step_new, settled_time
 
 if __name__=='__main__':
     main()
