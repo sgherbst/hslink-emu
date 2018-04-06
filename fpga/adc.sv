@@ -4,9 +4,9 @@ module adc #(
     parameter name = "adc",
     parameter ext = ".txt",
     parameter sig_bits = 1,
-    parameter sig_res_bits = 1,
+    parameter sig_point = 1,
     parameter time_bits = 1,
-    parameter time_res_bits = 1
+    parameter time_point = 1
 )(
     input wire clk,
     input wire [time_bits-1:0] time_curr,

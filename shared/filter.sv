@@ -5,66 +5,79 @@ import time_settings::*;
 import filter_settings::*;
 
 module filter (
-    input signal_t in,
+    input FILTER_IN_FORMAT in,
     input wire time_eq_in,
-    output signal_t out,
+    output FILTER_OUT_FORMAT out,
     input wire clk_sys,
-    input time_t time_next
+    input TIME_FORMAT time_next
 );
+    genvar k;
+
     // generate input history
-    logic signed [VALUE_HIST_WIDTHS[0]-1:0] value_hist [NUM_UI],
-    logic [TIME_HIST_WIDTHS[0]-1:0] time_hist [NUM_UI],
-    pwc_hist pwc_hist_i(.in(in), .time_eq_in(time_eq_in), .clk_sys(clk_sys), .time_next(time_next),
-                        .value_hist(value_hist), .time_hist(time_hist));
+    FILTER_IN_FORMAT value_hist [NUM_UI];
+    DT_FORMAT time_hist [NUM_UI];
+    
+    reg time_eq_in_d = 1'b0;
+    always @(posedge clk_sys) begin
+        time_eq_in_d <= time_eq_in;
+    end
 
-    // generate filter blocks, pulse responses, and products
-    logic signed [MAX_PWL_OUT_WIDTH-1:0] pwl_out [NUM_UI];
-    logic signed [MAX_PULSE_WIDTH-1:0] pulses [NUM_UI];
-    logic signed [PRODUCT_WIDTH-1:0] prods [NUM_UI];
-
-    genvar k, lshift;
     generate
-        for (k = 0; k < NUM_UI-1; k = k+1) begin : gen_filter_blocks
-            // filter block
-            filter_block #(.n(k)) filter_block_i(.time_point(time_hist[k][TIME_HIST_WIDTHS[k]-1:0]),
-                                                 .time_next(time_next),
-                                                 .pwl_out(pwl_out[k][PWL_OUT_WIDTHS[k]-1:0]),
-                                                 .clk_sys(clk_sys));
-
-            // pulse responses
-            if (k == 0) begin
-                assign pulses[PULSE_WIDTHS[0]-1:0] = pwl_out[0][PULSE_WIDTHS[0]-1:0] + PULSE_OFFSET_VALS[k];
+        for (k=0; k<NUM_UI; k=k+1) begin : gen_input_hist
+            if (k==0) begin
+                assign value_hist[k] = in;
+                mydff #(.N(DT_WIDTH)) time_dff_0(.in(time_next[DT_WIDTH-1:0]), .out(time_hist[0]), .cke(time_eq_in), .clk(clk_sys));
             end else begin
-                // plus term: from older time
-                lshift = PULSE_OFFSET_POINTS[k] - PWL_OFFSET_POINTS[k];
-                if (lshift < 0) begin
-                    $error("Problem forming pulse response: pulse_term_p.");
-                end
-                wire [PULSE_TERM_WIDTHS[k]-1:0] pulse_term_p = pwl_out[k][PWL_OUT_WIDTHS[k]-1:0] <<< lshift;
+                mydff #(.N(FILTER_IN_WIDTH)) value_dff_k(.in(value_hist[k-1]), .out(value_hist[k]), .cke(time_eq_in_d), .clk(clk_sys));
+                mydff #(.N(DT_WIDTH)) time_dff_k(.in(time_hist[k-1]), .out(time_hist[k]), .cke(time_eq_in), .clk(clk_sys));
+            end
+        end
+    endgenerate
+         
+    // generate filter blocks, pulse responses, and products
+    logic DT_FORMAT pwl_in [NUM_UI];
+    logic signed [FILTER_STEP_WIDTH-1:0] steps [NUM_UI];
+    logic signed [FILTER_PULSE_WIDTH-1:0] pulses [NUM_UI];
+    logic signed [FILTER_PROD_WIDTH-1:0] prods [NUM_UI];
 
-                // minus term: from newer time
-                lshift = PULSE_OFFSET_POINTS[k] - PWL_OFFSET_POINTS[k-1];
-                if (lshift < 0) begin
-                    $error("Problem forming pulse response: pulse_term_m.");
-                end
-                wire [PULSE_TERM_WIDTHS[k]-1:0] pulse_term_m = pwl_out[k-1][PWL_OUT_WIDTHS[k-1]-1:0] <<< lshift
+    generate
+        for (k = 0; k < NUM_UI-1; k = k+1) begin : gen_pwl_blocks
+            // PWL input time
+            assign pwl_in[k] = time_next - time_hist[k]
+            
+            // PWL instantiation
+            pwl #(.rom_name(FILTER_ROM_NAMES[k]),
+                  .in_width(DT_WIDTH),
+                  .in_point(DT_POINT),
+                  .addr_width(FILTER_ADDR_WIDTHS[k]),
+                  .addr_offset(FILTER_ADDR_OFFSETS[k]),
+                  .segment_width(FILTER_SEGMENT_WIDTHS[k]),
+                  .offset_width(FILTER_OFFSET_WIDTHS[k]),
+                  .bias_val(FILTER_BIAS_VALS[k]),
+                  .slope_width(FILTER_SLOPE_WIDTHS[k]),
+                  .slope_point(FILTER_SLOPE_POINTS[k]),
+                  .out_width(FILTER_STEP_WIDTH),
+                  .out_point(FILTER_STEP_POINT)) pwl_k (.in(pwl_in[k]), .clk(clk_sys), .out(steps[k]));
 
-                // add pulse offset to form the complete pulse term
-                assign pulses[k] = pulse_term_p - pulse_term_m + PULSE_OFFSET_VALS[k];
+            // Pulse responses
+            if (k == 0) begin
+                assign pulses[k] = steps[k];
+            end else begin
+                assign pulses[k] = steps[k] - steps[k-1];
             end
 
             // products
-            mymult #(.a_bits(PULSE_WIDTHS[k]),
-                     .a_point(PULSE_OFFSET_POINTS[k]),
-                     .b_bits(VALUE_HIST_WIDTHS[k]),
-                     .b_point(VALUE_HIST_POINTS[k]),
-                     .c_bits(PRODUCT_WIDTH),
-                     .c_point(OUT_POINT)) prod_mult_i (.a(pulses[k][PULSE_WIDTHS[k]-1:0]),
-                                                       .b(value_hist[k][VALUE_HIST_WIDTHS[k]-1:0]),
-                                                       .c(prods[k]));
+            mymult #(.a_bits(FILTER_PULSE_WIDTH)
+                     .a_point(FILTER_PULSE_POINT),
+                     .b_bits(FILTER_IN_WIDTH),
+                     .b_point(FILTER_IN_POINT),
+                     .c_bits(FILTER_PROD_WIDTH),
+                     .c_point(FILTER_PROD_POINT)) prod_k (.a(pulses[k]),
+                                                          .b(value_hist[k]),
+                                                          .c(prods[k]));
         end
     endgenerate
 
     // sum all of the terms together
-    mysum #(.in_bits(PRODUCT_WIDTH), .in_terms(NUM_UI), .out_bits(SIGNAL_WIDTH)) sum_i(.in(prods), .out(out));
+    mysum #(.in_bits(FILTER_PROD_WIDTH), .in_terms(NUM_UI), .out_bits(FILTER_OUT_WIDTH)) sum_i(.in(prods), .out(out));
 endmodule

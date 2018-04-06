@@ -3,7 +3,7 @@
 module myrom #(
     parameter addr_bits = 1,
     parameter data_bits = 1,
-    parameter filename = "rom.list"
+    parameter filename = "rom.mem"
 )(
     input wire [addr_bits-1:0] addr,
     output reg [data_bits-1:0] dout,
