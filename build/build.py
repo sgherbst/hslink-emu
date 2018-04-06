@@ -4,6 +4,7 @@ from scipy.signal import fftconvolve
 from math import ceil, floor, log2
 import logging, sys
 import os.path
+import pathlib
 
 from msemu.rf import get_sample_s4p, s4p_to_impulse, imp2step
 from msemu.pwl import Waveform
@@ -167,12 +168,18 @@ class Emulation:
         dt_max_int = self.num_ui * self.clk_tx.T_max_int
         self.dt_fmt = Fixed(point_fmt=self.time_fmt.point_fmt, width_fmt=Unsigned.make(dt_max_int))
 
-    def create_filter_pwl_tables(self):
-        self.filter_rom_names = []
+    def create_filter_pwl_tables(self, rom_dir='roms'):
+        # create rom directory if necessary
+        this_file = os.path.abspath(__file__)
+        self.rom_dir_path = os.path.abspath(os.path.join(os.path.dirname(this_file), rom_dir))
+        pathlib.Path(self.rom_dir_path).mkdir(parents=True, exist_ok=True)
+
+        self.filter_rom_paths = []
         self.filter_pwl_tables = []
         for k in range(self.num_ui):
             filter_pwl_table = self.create_filter_pwl_table(k)
-            self.filter_rom_names.append('filter_rom_'+str(k))
+            filter_rom_file = 'filter_rom_'+str(k)+'.mem'
+            self.filter_rom_paths.append(os.path.join(self.rom_dir_path, filter_rom_file))
             self.filter_pwl_tables.append(filter_pwl_table)
 
     def create_filter_pwl_table(self, k, addr_bits_max=14):
@@ -213,9 +220,9 @@ class Emulation:
         else:
             raise Exception('Failed to find a suitable PWL representation.')
 
-    def write_filter_rom_files(self, dir='roms', suffix='.mem'):
-        for filter_rom_name, filter_pwl_table in zip(self.filter_rom_names, self.filter_pwl_tables):
-            filter_pwl_table.write_table(os.path.join(dir, filter_rom_name+suffix))
+    def write_filter_rom_files(self, dir='roms'):
+        for filter_rom_path, filter_pwl_table in zip(self.filter_rom_paths, self.filter_pwl_tables):
+            filter_pwl_table.write_table(os.path.join(dir, filter_rom_path))
 
     def create_filter_package(self, name='filter_package'):
         pack = VerilogPackage(name=name)
@@ -229,7 +236,7 @@ class Emulation:
         pack.add_fixed_format(self.prod_fmt, 'FILTER_PROD')
 
         # PWL-specific definitions
-        pack.add(VerilogConstant(name='FILTER_ROM_NAMES', value=self.filter_rom_names, kind='string'))
+        pack.add(VerilogConstant(name='FILTER_ROM_PATHS', value=self.filter_rom_paths, kind='string'))
         pack.add(VerilogConstant(name='FILTER_ADDR_WIDTHS',
                                  value=[filter_pwl_table.high_bits_fmt.n for filter_pwl_table in self.filter_pwl_tables],
                                  kind='int'))

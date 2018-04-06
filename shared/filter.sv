@@ -46,7 +46,7 @@ module filter (
             assign pwl_in[k] = time_next - time_hist[k];
             
             // PWL instantiation
-            pwl #(.rom_name(FILTER_ROM_NAMES[k]),
+            pwl #(.rom_name(FILTER_ROM_PATHS[k]),
                   .in_width(DT_WIDTH),
                   .in_point(DT_POINT),
                   .addr_width(FILTER_ADDR_WIDTHS[k]),

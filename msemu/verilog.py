@@ -38,7 +38,7 @@ class VerilogConstant:
     def __str__(self):
         arr = []
 
-        arr.append('const')
+        arr.append('parameter')
         if self.kind is not None:
             arr.append(self.kind)
         arr.append(self.name)

@@ -10,7 +10,7 @@ module pwl #(
     parameter offset_width = 1,
     parameter bias_val = 1,
     parameter slope_width = 1,
-    parameter slope_point = 1
+    parameter slope_point = 1,
     parameter out_width = 1,
     parameter out_point = 1
 )(
@@ -32,7 +32,7 @@ module pwl #(
 
     // calculate rom addr
     wire [in_diff_width-1:0] in_diff = in - addr_offset;
-    assign rom_addr = in_diff[in_diff_width-1:segment_width]
+    assign rom_addr = in_diff[in_diff_width-1:segment_width];
 
     // calculate length along segment
     // it is stored with a latency of one clock cycle
@@ -48,7 +48,7 @@ module pwl #(
 
     // compute linear correction
     wire signed [prod_width-1:0] prod;
-    mymult #(.a_bits(segment_width)
+    mymult #(.a_bits(segment_width+1), // add one to segment width to account for conversion to signed number
              .a_point(in_point),
              .b_bits(slope_width),
              .b_point(slope_point),

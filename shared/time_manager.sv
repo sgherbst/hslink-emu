@@ -1,14 +1,14 @@
 `timescale 1ns/1ps
 
-import time_settings:time_t;
+import time_package::TIME_FORMAT;
 
 module time_manager #(
     parameter N=1,
     parameter time_bits=1
 )(
-    input time_t time_in [N],
-    output time_t time_next,
-    output time_t time_curr=0,
+    input TIME_FORMAT time_in [N],
+    output TIME_FORMAT time_next,
+    output TIME_FORMAT time_curr=0,
     input wire clk_sys
 );
     generate

@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 
 module mydff #(
-    parameter N=1,
+    parameter N=1
 ) (
     input wire [N-1:0] in,
     input wire clk,

@@ -1,15 +1,16 @@
 `timescale 1ns/1ps
 
+import time_package::TIME_FORMAT;
+
 module clock #(
     parameter integer N = 1,
-    parameter integer TIME_INC_BITS = 1,
-    parameter integer TIME_WIDTH = 1
+    parameter integer TIME_INC_BITS = 1
 )(
     input wire clk_orig,
     input wire clk_sys,
-    input [TIME_WIDTH-1:0] time_next,
+    input TIME_FORMAT time_next,
     input wire [TIME_INC_BITS-1:0] inc,
-    output [TIME_WIDTH-1:0] time_clock=0,
+    output TIME_FORMAT time_clock=0,
     output wire [N-1:0] clk_out,
     output wire time_eq
 );
