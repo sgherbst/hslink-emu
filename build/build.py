@@ -77,12 +77,13 @@ def main(plot_dt=1e-12):
 
 class Emulation:
     def __init__(self,
-                 err, # error budget
-                 Tstop = 20e-9, # stopping time of emulation
-                 Fnom = 8e9, # nominal TX frequency
-                 jitter_pkpk = 10e-12, # peak-to-peak jitter of TX
-                 R_in = 1, # input range
-                 t_res = 1e-14 # smallest time resolution represented
+                 err,                           # error budget
+                 Tstop = 20e-9,                 # stopping time of emulation
+                 Fnom = 8e9,                    # nominal TX frequency
+                 jitter_pkpk = 10e-12,          # peak-to-peak jitter of TX
+                 R_in = 1,                      # input range
+                 t_res = 1e-14,                 # smallest time resolution represented
+                 t_trunc = 10e-9                # time at which step response is truncated
     ):
         self.err = err
         self.Tstop = Tstop
@@ -90,9 +91,10 @@ class Emulation:
         self.jitter_pkpk = jitter_pkpk
         self.R_in = R_in
         self.t_res = t_res
+        self.t_trunc = t_trunc
 
         # Get the step response
-        self.step, self.settled_time = get_combined_step()
+        self.step = get_combined_step()
 
         # Compute time format
         self.set_time_format()
@@ -149,9 +151,11 @@ class Emulation:
 
     def set_num_ui(self):
         # Determine number of UIs required to ensure the full step response is covered
-        self.num_ui = int(ceil(self.settled_time / self.clk_tx.T_min_float)) + 1
-        assert (self.num_ui-1)*self.clk_tx.T_min_float >= self.settled_time
-        assert (self.num_ui-2)*self.clk_tx.T_min_float < self.settled_time
+        self.num_ui = int(ceil(self.t_trunc / self.clk_tx.T_min_float)) + 1
+        assert (self.num_ui-1)*self.clk_tx.T_min_float >= self.t_trunc
+        assert (self.num_ui-2)*self.clk_tx.T_min_float < self.t_trunc
+
+        logging.debug('Number of UIs: {}'.format(self.num_ui))
 
         # Set the format for the time history in the filter
         dt_max_int = self.num_ui * self.clk_tx.T_max_int
@@ -372,7 +376,7 @@ class ClockWithJitter:
     def T_max_float(self):
         return self.T_max_int * self.time_fmt.res
 
-def get_combined_step(db=-4, dt=0.1e-12, T=20e-9, err_trunc=0.003):
+def get_combined_step(db=-4, dt=0.1e-12, T=20e-9):
     # get channel impulse response
     s4p = get_sample_s4p()
     t, imp_ch = s4p_to_impulse(s4p, dt, T)
@@ -385,11 +389,8 @@ def get_combined_step(db=-4, dt=0.1e-12, T=20e-9, err_trunc=0.003):
     
     # compute resulting step response
     step = Waveform(t=t, v=imp2step(imp=imp_eff, dt=dt))
-    
-    # compute time at which waveform is settled
-    settled_time = step.find_settled_time(thresh=err_trunc)
 
-    return step, settled_time
+    return step
 
 if __name__=='__main__':
     main()

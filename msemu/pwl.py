@@ -1,7 +1,8 @@
 import numpy as np
 import logging, sys
-from math import ceil
+from math import ceil, floor
 from scipy.interpolate import interp1d
+import cvxpy
 
 class PWL:
     def __init__(self, offsets, slopes, times, error):
@@ -64,32 +65,49 @@ class Waveform:
 
         return self.t[idx_settled]
 
-    def make_pwl(self, times):
+    def make_pwl(self, times, n_check=1000):
         # add one last point at the end
         dtau = Waveform.get_dt(times)
-        times_plus_end = np.concatenate((times, [times[-1]+dtau]))
-        t_start = times_plus_end[0]
-        t_stop = times_plus_end[-1]
+        t_ctrl = np.concatenate((times, [times[-1]+dtau]))
+        t_start = t_ctrl[0]
+        t_stop = t_ctrl[-1]
 
         # check that the waveform is represented at the times required
         assert t_start >= self.t[0], '{} !>= {}'.format(t_start, self.t[0])
         assert t_stop <= self.t[-1], '{} !<= {}'.format(t_stop, self.t[-1])
-
-        # compute control points
-        values = interp1d(self.t, self.v)(times_plus_end)
+        assert n_check >= len(t_ctrl)
 
         # points at which error will be checked
-        idx_min = np.searchsorted(self.t, t_start)
-        idx_max = np.searchsorted(self.t, t_stop)-1
+        t_check = np.linspace(t_start, t_stop, n_check)
+        v_check = interp1d(self.t, self.v)(t_check)
+
+        # compute control points
+        A = np.zeros((n_check, len(t_ctrl)))
+        for k in range(n_check):
+            idx_float = (t_check[k] - t_ctrl[0]) / dtau
+            idx_int = int(floor(idx_float))
+            alpha = idx_float - idx_int
+            if 0 <= idx_int < len(t_ctrl) - 1:
+                A[k, idx_int] = 1 - alpha
+                A[k, idx_int+1] = alpha
+            elif idx_int == len(t_ctrl) - 1:
+                A[k, idx_int] = 1
+            else:
+                raise Exception('Invalid index.')
+
+        # run optimization
+        x = cvxpy.Variable(len(t_ctrl))
+        obj = cvxpy.Minimize(cvxpy.pnorm(A*x - v_check, p=float('inf')))
+        prob = cvxpy.Problem(obj)
+        error = prob.solve()
 
         # check error
-        resid = interp1d(times_plus_end, values)(self.t[idx_min:idx_max+1]) - self.v[idx_min:idx_max+1]
-        error = np.max(np.abs(resid))
         logging.debug('PWL error: {}'.format(error))
 
         # compute PWL respresentation
-        offsets = values[:-1]
-        slopes = np.diff(values)/dtau
+        v_ctrl = np.array(x.value).flatten()
+        offsets = v_ctrl[:-1]
+        slopes = np.diff(v_ctrl)/dtau
 
         return PWL(offsets=offsets, slopes=slopes, times=times, error=error)
 
