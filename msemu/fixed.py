@@ -11,109 +11,211 @@ def listify(val_or_vals):
     return vals
 
 class WidthFormat:
-    def __init__(self, n):
-        self.n = n
+    # constructor
 
-    def bin_str(self, val):
-        if val < 0:
-            conv_val = (1 << self.n) + val
+    def __init__(self, n, signed, min=None, max=None):
+        assert isinstance(n, int)
+        self._n = n
+
+        self._signed = signed
+
+        if min is not None:
+            assert isinstance(min, int)
+            assert min >= self.abs_min
+            self._min = min
         else:
-            conv_val = val
+            self._min = self.abs_min
 
-        str_val = format(conv_val, '0' + str(self.n) + 'b')
-        if len(str_val) != self.n:
-            raise ValueError('Value to be converted cannot be represented: %d, %d' % (val, self.n))
+        if max is not None:
+            assert isinstance(max, int)
+            assert max <= self.abs_max
+            self._max = max
+        else:
+            self._max = self.abs_max
 
-        return str_val
+    # properties
 
-class Unsigned(WidthFormat):
-    def __init__(self, n):
-        super().__init__(n=n)
+    @property
+    def n(self):
+        return self._n
+
+    @property
+    def signed(self):
+        return self._signed
+
+    @property
+    def unsigned(self):
+        return not self.signed
+
+    @property
+    def abs_min(self):
+        if self.signed:
+            return -(1<<(self.n-1))
+        else:
+            return 0
+
+    @property
+    def abs_max(self):
+        if self.signed:
+            return (1<<(self.n-1))-1
+        else:
+            return (1<<self.n)-1
 
     @property
     def min(self):
-        return 0
+        return self._min
 
     @property
     def max(self):
-        return (1<<self.n)-1
+        return self._max
 
-    @staticmethod
-    def width(val_or_vals):
+    # member functions
+
+    def bin_str(self, val_or_vals):
         vals = listify(val_or_vals)
+        bin_strs = []
 
-        max_width = 0
         for val in vals:
-            assert isinstance(val, int), "Values must be integers."
-            assert val >= 0, "Unsigned values must be non-negative"
-            width = int(ceil(log2(val+1)))
-            max_width = max(width, max_width)
+            assert isinstance(val, int)
+            assert self.min <= val <= self.max
 
-        return max_width
-
-    @staticmethod
-    def make(val_or_vals):
-        n = Unsigned.width(val_or_vals)
-        return Unsigned(n=n)
-
-class Signed(WidthFormat):
-    def __init__(self, n):
-        super().__init__(n=n)
-
-    @property
-    def min(self):
-        return -(1<<(self.n-1))
-
-    @property
-    def max(self):
-        return (1<<(self.n-1))-1
-
-    @staticmethod
-    def width(val_or_vals):
-        vals = listify(val_or_vals)
-
-        max_width = 0
-        for val in vals:
-            assert isinstance(val, int), "Values must be integers."
             if val < 0:
-                width = int(ceil(1 + log2(-val)))
+                unsigned_val = (1<<self.n) + val
             else:
-                width = int(ceil(1 + log2(val+1)))
+                unsigned_val = val
 
-            max_width = max(width, max_width)
+            str_val = format(unsigned_val, '0' + str(self.n) + 'b')
+            assert len(str_val) == self.n
 
-        return max_width
+            bin_strs.append(str_val)
+
+        if isinstance(val_or_vals, collections.Iterable):
+            return bin_strs
+        else:
+            assert len(bin_strs)==1
+            return bin_strs[0]
+
+    def to_signed(self):
+        return WidthFormat.make([self.min, self.max], signed=True)
+
+    def to_unsigned(self):
+        return WidthFormat.make([self.min, self.max], signed=False)
+
+    # static methods
 
     @staticmethod
-    def make(val_or_vals):
-        n = Signed.width(val_or_vals)
-        return Signed(n=n)
+    def width(val_or_vals, signed):
+        vals = listify(val_or_vals)
+
+        widths = []
+        for val in vals:
+            assert isinstance(val, int), 'Values must be integers.'
+
+            if signed:
+                if val < 0:
+                    width = int(ceil(1+log2(-val)))
+                else:
+                    width = int(ceil(1+log2(val+1)))
+            else:
+                assert val >= 0, 'Unsigned values must be non-negative.'
+                width = int(ceil(log2(val+1)))
+
+            widths.append(width)
+
+        if isinstance(val_or_vals, collections.Iterable):
+            return widths
+        else:
+            assert len(widths)==1
+            return widths[0]
+
+    @staticmethod
+    def make(val_or_vals, signed):
+        vals = listify(val_or_vals)
+        return WidthFormat(n=max(WidthFormat.width(vals, signed=signed)),
+                           min=min(vals), max=max(vals), signed=signed)
+
+    # operator overloading
+
+    def __add__(self, other):
+        intvals = [self.min + other.min, self.max + other.max]
+
+        if self.unsigned and other.unsigned:
+            return WidthFormat.make(intvals, signed=False)
+        elif self.signed and other.signed:
+            return WidthFormat.make(intvals, signed=True)
+        else:
+            raise ValueError('Signedness must match.')
+
+    def __sub__(self, other):
+        intvals = [self.min - other.max, self.max - other.min]
+
+        if self.unsigned and other.unsigned:
+            return WidthFormat.make(intvals, signed=False)
+        elif self.signed and other.signed:
+            return WidthFormat.make(intvals, signed=True)
+        else:
+            raise ValueError('Signedness must match.')
+
+    def __neg__(self):
+        return WidthFormat.make([-self.min, -self.max], signed=self.signed)
+
+    def __mul__(self, other):
+        intvals = [self.min * other.min,
+                   self.min * other.max,
+                   self.max * other.min,
+                   self.max * other.max]
+
+        if self.unsigned and other.unsigned:
+            return WidthFormat.make(intvals, signed=False)
+        elif self.signed and other.signed:
+            return WidthFormat.make(intvals, signed=True)
+        else:
+            raise ValueError('Signedness must match.')
+
+    def __rshift__(self, shift):
+        intvals = [self.min >> shift,
+                   self.max >> shift]
+        return WidthFormat.make(intvals, signed=self.signed)
+
+    def __lshift__(self, shift):
+        intvals = [self.min << shift,
+                   self.max << shift]
+        return WidthFormat.make(intvals, signed=self.signed)
 
 class PointFormat:
+    # constructor
+
     def __init__(self, point):
         self.point = point
+
+    # properties
 
     @property
     def res(self):
         return PointFormat.point2res(self.point)
 
-    def intval(self, val, func=None):
+    # member functions
+
+    def intval(self, val_or_vals, func=None):
         if func is None:
             func = round
-        return PointFormat.float2int(val=val, point=self.point, func=func)
+        return PointFormat.float2int(val_or_vals, point=self.point, func=func)
 
-    def to_fixed(self, val_or_vals, width_cls):
+    def to_fixed(self, val_or_vals, signed):
         vals = listify(val_or_vals)
 
         min_float = min(vals)
         max_float = max(vals)
 
-        min_intval = self.intval(val=min_float, func=floor)
-        max_intval = self.intval(val=max_float, func=ceil)
+        min_intval = self.intval(min_float, func=floor)
+        max_intval = self.intval(max_float, func=ceil)
 
         point_fmt = PointFormat(self.point)
-        width_fmt = width_cls.make([min_intval, max_intval])
+        width_fmt = WidthFormat.make([min_intval, max_intval], signed=signed)
+
         return Fixed(point_fmt=point_fmt, width_fmt=width_fmt)
+
+    # static methods
 
     @staticmethod
     def res2point(res):
@@ -124,135 +226,57 @@ class PointFormat:
         return 2.0 ** (-point)
 
     @staticmethod
-    def float2int(val, point, func):
-        scaled = val/PointFormat.point2res(point)
+    def float2int(val_or_vals, point, func):
+        vals = listify(val_or_vals)
+        res =  PointFormat.point2res(point)
+        scaled_floats = [val/res for val in vals]
 
-        intval = int(func(scaled))
-        assert isinstance(intval, int), "Problem generating integer representation."
+        intvals = [int(func(scaled_float)) for scaled_float in scaled_floats]
+        assert all(isinstance(intval, int) for intval in intvals)
 
-        return intval
+        if isinstance(val_or_vals, collections.Iterable):
+            return intvals
+        else:
+            assert len(intvals)==1
+            return intvals[0]
 
     @staticmethod
     def make(res):
         point = PointFormat.res2point(res)
         return PointFormat(point=point)
 
+    # operator overloading
+
+    def __add__(self, other):
+        assert self.point == other.point, 'Points must be aligned.'
+        return self
+
+    def __sub__(self, other):
+        assert self.point == other.point, 'Points must be aligned.'
+        return self
+
+    def __neg__(self):
+        return self
+
+    def __mul__(self, other):
+        return PointFormat(self.point+other.point)
+
 class Fixed:
+    # constructor
+
     def __init__(self, point_fmt, width_fmt):
         self.point_fmt = point_fmt
         self.width_fmt = width_fmt
 
+    # properties
+
     @property
     def signed(self):
-        if isinstance(self.width_fmt, Signed):
-            return True
-        elif isinstance(self.width_fmt, Unsigned):
-            return False
-        else:
-            return ValueError('Invalid signedness.')
+        return self.width_fmt.signed
 
     @property
     def unsigned(self):
-        return not self.signed
-
-    def to_signed(self):
-        point_fmt = PointFormat(self.point_fmt.point)
-
-        intvals = [self.width_fmt.min,
-                   self.width_fmt.max]
-        width_fmt = Signed.make(intvals)
-
-        return Fixed(point_fmt=point_fmt, width_fmt=width_fmt)
-
-    def get_width_cls(self, other):
-        if self.unsigned and other.unsigned:
-            return Unsigned
-        elif self.signed and other.signed:
-            return Signed
-        else:
-            raise ValueError('Signedness must match.')
-
-    def __mul__(self, other):
-        point_fmt = PointFormat(self.point_fmt.point+other.point_fmt.point)
-
-        intvals = [self.width_fmt.min * other.width_fmt.min,
-                   self.width_fmt.min * other.width_fmt.max,
-                   self.width_fmt.max * other.width_fmt.min,
-                   self.width_fmt.max * other.width_fmt.max]
-        width_fmt = self.get_width_cls(other).make(intvals)
-
-        return Fixed(point_fmt=point_fmt, width_fmt=width_fmt)
-
-    def __radd__(self, other):
-        # needed for sum function to work...
-        if other == 0:
-            return self.clone()
-        else:
-            return self.__add__(other)
-
-    def __add__(self, other):
-        # needed for sum function to work...
-        if other == 0:
-            return self
-
-        # main code
-        assert self.point_fmt.point == other.point_fmt.point, "Points must be aligned"
-        point_fmt = PointFormat(self.point_fmt.point)
-
-        intvals = [self.width_fmt.min + other.width_fmt.min,
-                   self.width_fmt.max + other.width_fmt.max]
-        width_fmt = self.get_width_cls(other).make(intvals)
-
-        return Fixed(point_fmt=point_fmt, width_fmt=width_fmt)
-
-    def __neg__(self):
-        assert isinstance(self.width_fmt, Signed), "Value must be signed to negate."
-
-        point_fmt = PointFormat(self.point_fmt.point)
-
-        intvals = [-self.width_fmt.min,
-                   -self.width_fmt.max]
-        width_fmt = Signed.make(intvals)
-
-        return Fixed(point_fmt=point_fmt, width_fmt=width_fmt)
-
-    def __sub__(self, other):
-        return self + (-other)
-
-    def align_to(self, point):
-        point_fmt = PointFormat(point)
-
-        if self.point_fmt.point >= point:
-            rshift = self.point_fmt.point - point
-            intvals = [self.width_fmt.min >> rshift,
-                       self.width_fmt.max >> rshift]
-        else:
-            lshift = point - self.point_fmt.point
-            intvals = [self.width_fmt.min << lshift,
-                       self.width_fmt.max << lshift]
-
-        if isinstance(self.width_fmt, Unsigned):
-            return Fixed(point_fmt=point_fmt, width_fmt=Unsigned.make(intvals))
-        elif isinstance(self.width_fmt, Signed):
-            return Fixed(point_fmt=point_fmt, width_fmt=Signed.make(intvals))
-        else:
-            raise Exception('Invalid signedness.')
-
-    def intval(self, val, func=None):
-        intval = self.point_fmt.intval(val=val, func=func)
-        assert self.min_int <= intval <= self.max_int, "Integer value out of range."
-
-        return intval
-
-    def bin_str(self, val, func=None):
-        intval = self.intval(val=val, func=func)
-        return self.width_fmt.bin_str(intval)
-
-    def clone(self):
-        if self.signed:
-            return Fixed(point_fmt=PointFormat(self.point), width_fmt=Signed(self.n))
-        else:
-            return Fixed(point_fmt=PointFormat(self.point), width_fmt=Unsigned(self.n))
+        return self.width_fmt.unsigned
 
     @property
     def n(self):
@@ -282,17 +306,88 @@ class Fixed:
     def max_float(self):
         return self.max_int * self.res
 
+    # member functions
+
+    def to_signed(self):
+        return Fixed(point_fmt=self.point_fmt, width_fmt=self.width_fmt.to_signed())
+
+    def to_unsigned(self):
+        return Fixed(point_fmt=self.point_fmt, width_fmt=self.width_fmt.to_unsigned())
+
+    def align_to(self, point):
+        point_fmt = PointFormat(point)
+
+        if self.point_fmt.point >= point:
+            rshift = self.point_fmt.point - point
+            width_fmt = self.width_fmt >> rshift
+        else:
+            lshift = point - self.point_fmt.point
+            width_fmt = self.width_fmt << lshift
+
+        return Fixed(point_fmt=point_fmt, width_fmt=width_fmt)
+
+    def intval(self, val_or_vals, func=None):
+        vals = listify(val_or_vals)
+
+        intvals = self.point_fmt.intval(vals, func=func)
+        assert all(self.min_int <= intval <= self.max_int for intval in intvals)
+
+        if isinstance(val_or_vals, collections.Iterable):
+            return intvals
+        else:
+            assert len(intvals) == 1
+            return intvals[0]
+
+    def bin_str(self, val_or_vals, func=None):
+        vals = listify(val_or_vals)
+
+        intvals = self.intval(vals, func=func)
+        bin_strs = self.width_fmt.bin_str(intvals)
+
+        if isinstance(val_or_vals, collections.Iterable):
+            return bin_strs
+        else:
+            assert len(bin_strs) == 1
+            return bin_strs[0]
+
+    # static methods
+
     @staticmethod
-    def make(val_or_vals, res, width_cls):
-        return PointFormat.make(res).to_fixed(val_or_vals, width_cls)
+    def make(val_or_vals, res, signed):
+        return PointFormat.make(res).to_fixed(val_or_vals, signed=signed)
+
+    # operator overloading
+
+    def __add__(self, other):
+        return Fixed(point_fmt=self.point_fmt+other.point_fmt,
+                     width_fmt=self.width_fmt+other.width_fmt)
+
+    def __radd__(self, other):
+        # only here so that sum function will work...
+        if other == 0:
+            return self
+        else:
+            raise Exception('other must not be 0 or a Fixed type...')
+
+    def __sub__(self, other):
+        return Fixed(point_fmt=self.point_fmt-other.point_fmt,
+                     width_fmt=self.width_fmt-other.width_fmt)
+
+    def __neg__(self):
+        return Fixed(point_fmt=-self.point_fmt,
+                     width_fmt=-self.width_fmt)
+
+    def __mul__(self, other):
+        return Fixed(point_fmt=self.point_fmt*other.point_fmt,
+                     width_fmt=self.width_fmt*other.width_fmt)
 
 def main():
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
-    fmt1 = Fixed.make(3.23, 0.0001, Signed)
+    fmt1 = Fixed.make([-3.23, 3.23], 0.0001, signed=True)
     print(fmt1.bin_str(-0.456))
 
-    fmt2 = Fixed.make(7.89, 0.0001, Unsigned)
+    fmt2 = Fixed.make(7.89, 0.0001, signed=False)
     print(fmt2.n, fmt2.to_signed().n)
     fmt2 = fmt2.to_signed()
 
@@ -304,6 +399,11 @@ def main():
 
     fmt5 = fmt4.align_to(PointFormat.res2point(0.1))
     print(fmt5.n, fmt5.point, fmt5.min_float, fmt5.max_float)
+
+    fmt6 = Fixed.make([1,3], 0.001, signed=False)
+    fmt7 = fmt6.point_fmt.to_fixed([0, 1], signed=False)
+    fmt8 = fmt6-fmt7
+    print(fmt8.min_float, fmt8.max_float)
 
 if __name__=='__main__':
     main()

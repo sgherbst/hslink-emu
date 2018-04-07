@@ -101,9 +101,6 @@ class Waveform:
         prob = cvxpy.Problem(obj)
         error = prob.solve()
 
-        # check error
-        logging.debug('PWL error: {}'.format(error))
-
         # compute PWL respresentation
         v_ctrl = np.array(x.value).flatten()
         offsets = v_ctrl[:-1]

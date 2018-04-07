@@ -10,7 +10,8 @@ from msemu.rf import get_sample_s4p, s4p_to_impulse, imp2step
 from msemu.pwl import Waveform
 from msemu.fixed import Fixed, Signed, Unsigned, PointFormat
 from msemu.ctle import get_ctle_imp
-from msemu.verilog import VerilogPackage, VerilogConstant, VerilogTypedef
+from msemu.verilog import VerilogPackage, VerilogConstant
+from msemu.tx_ffe import TxFFE
 
 class ErrorBudget:
     # all errors are normalized to a particular value:
@@ -81,7 +82,6 @@ class Emulation:
                  Tstop = 20e-9,                 # stopping time of emulation
                  Fnom = 8e9,                    # nominal TX frequency
                  jitter_pkpk = 10e-12,          # peak-to-peak jitter of TX
-                 R_in = 1,                      # input range
                  t_res = 1e-14,                 # smallest time resolution represented
                  t_trunc = 10e-9                # time at which step response is truncated
     ):
@@ -89,7 +89,6 @@ class Emulation:
         self.Tstop = Tstop
         self.Fnom = Fnom
         self.jitter_pkpk = jitter_pkpk
-        self.R_in = R_in
         self.t_res = t_res
         self.t_trunc = t_trunc
 
@@ -170,6 +169,7 @@ class Emulation:
         self.filter_rom_paths = []
         self.filter_pwl_tables = []
         for k in range(self.num_ui):
+            logging.debug('Building PWL #{}'.format(k))
             filter_pwl_table = self.create_filter_pwl_table(k)
             filter_rom_file = 'filter_rom_'+str(k)+'.mem'
             self.filter_rom_paths.append(os.path.join(self.rom_dir_path, filter_rom_file))
