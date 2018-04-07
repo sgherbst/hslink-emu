@@ -5,6 +5,7 @@ from math import ceil, floor, log2
 import logging, sys
 import os.path
 import pathlib
+import math
 
 from msemu.rf import get_sample_s4p, s4p_to_impulse, imp2step
 from msemu.pwl import Waveform
@@ -99,7 +100,7 @@ class Emulation:
 
         # Determine clock representation
         self.clk_tx = ClockWithJitter(freq=self.Fnom, jitter_pkpk=self.jitter_pkpk, time_fmt=self.time_fmt)
-        self.clk_rx = ClockWithJitter(freq=self.Fnom, jitter_pkpk=self.jitter_pkpk, time_fmt=self.time_fmt, phases=2)
+        self.clk_rx = ClockWithJitter(freq=self.Fnom/math.pi, jitter_pkpk=self.jitter_pkpk, time_fmt=self.time_fmt, phases=2)
 
         # Set points of several signals
         self.set_in_format()
@@ -393,9 +394,6 @@ def get_combined_step(db=-4, dt=0.1e-12, T=20e-9, err_trunc=1e-3):
     v_new = step.v.copy()
     v_new[step.t >= settled_time] = step.yss
     step_new = Waveform(t=step.t, v=v_new)
-
-    print(step_new)
-    print(settled_time)
 
     return step_new, settled_time
 
