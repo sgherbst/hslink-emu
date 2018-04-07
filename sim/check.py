@@ -98,8 +98,8 @@ def measure_error(result):
 
 def plot(result):
     plt.step(result.in_.t, result.in_.v, '-k', where='post', label='in')
-    plt.plot(result.rxp.t, result.rxp.v, 'b*', label='rxp')
-    plt.plot(result.rxn.t, result.rxn.v, 'ro', label='rxn')
+    plt.plot(result.rxp.t, result.rxp.v, 'bo', label='rxp', markersize=3)
+    plt.plot(result.rxn.t, result.rxn.v, 'ro', label='rxn', markersize=3)
     plt.plot(result.out.t, result.out.v, '-g', label='sim')
     plt.ylim(-1.25, 1.25)
     plt.legend(loc='lower right')

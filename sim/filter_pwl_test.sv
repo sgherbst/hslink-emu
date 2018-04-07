@@ -2,7 +2,7 @@ import time_package::*;
 import filter_package::*;
 
 module top;
-    localparam k=30;
+    localparam k=NUM_UI-1;
     localparam longint max_time = longint'(1)<<(longint'(FILTER_ADDR_WIDTHS[k])+longint'(FILTER_SEGMENT_WIDTHS[k]));
 
     integer f;

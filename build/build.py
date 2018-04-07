@@ -5,7 +5,6 @@ from math import ceil, floor, log2
 import logging, sys
 import os.path
 import pathlib
-import math
 
 from msemu.rf import get_sample_s4p, s4p_to_impulse, imp2step
 from msemu.pwl import Waveform
@@ -21,10 +20,10 @@ class ErrorBudget:
     # R_in*yss: normalized to R_in*yss
 
     def __init__(self,
-                 in_ = 1e-9,            # error in input quantization [R_in]
-                 pwl = 1e-4,            # error in pwl segment representation [yss]
-                 step = 1e-9,           # error in step quantization [yss]
-                 prod = 1e-9            # error in product of pulse response and input quantization [R_in*yss]
+                 in_ = 1e-4,            # error in input quantization [R_in]
+                 pwl = 1e-3,            # error in pwl segment representation [yss]
+                 step = 1e-4,           # error in step quantization [yss]
+                 prod = 1e-4            # error in product of pulse response and input quantization [R_in*yss]
     ):
         self.pwl = pwl
         self.step = step
@@ -100,7 +99,7 @@ class Emulation:
 
         # Determine clock representation
         self.clk_tx = ClockWithJitter(freq=self.Fnom, jitter_pkpk=self.jitter_pkpk, time_fmt=self.time_fmt)
-        self.clk_rx = ClockWithJitter(freq=self.Fnom/math.pi, jitter_pkpk=self.jitter_pkpk, time_fmt=self.time_fmt, phases=2)
+        self.clk_rx = ClockWithJitter(freq=self.Fnom, jitter_pkpk=self.jitter_pkpk, time_fmt=self.time_fmt, phases=2)
 
         # Set points of several signals
         self.set_in_format()
@@ -373,7 +372,7 @@ class ClockWithJitter:
     def T_max_float(self):
         return self.T_max_int * self.time_fmt.res
 
-def get_combined_step(db=-4, dt=0.1e-12, T=20e-9, err_trunc=1e-3):
+def get_combined_step(db=-4, dt=0.1e-12, T=20e-9, err_trunc=0.003):
     # get channel impulse response
     s4p = get_sample_s4p()
     t, imp_ch = s4p_to_impulse(s4p, dt, T)
@@ -390,12 +389,7 @@ def get_combined_step(db=-4, dt=0.1e-12, T=20e-9, err_trunc=1e-3):
     # compute time at which waveform is settled
     settled_time = step.find_settled_time(thresh=err_trunc)
 
-    # fill step response with settled value
-    v_new = step.v.copy()
-    v_new[step.t >= settled_time] = step.yss
-    step_new = Waveform(t=step.t, v=v_new)
-
-    return step_new, settled_time
+    return step, settled_time
 
 if __name__=='__main__':
     main()

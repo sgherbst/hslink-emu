@@ -50,7 +50,7 @@ module clock #(
     endgenerate
 
     // delay clock enable by one cycle
-    reg [N-1:0] clk_en_d;
+    reg [N-1:0] clk_en_d = 0;
     always @(posedge clk_sys) begin
         clk_en_d <= clk_en;
     end
