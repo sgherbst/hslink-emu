@@ -20,11 +20,16 @@ class TxFFE:
         return self._taps_array
 
     @property
-    def taps_array_plus_int(self, point_fmt):
-        return [point_fmt.intval(taps)]
+    def settings(self):
+        retval = []
 
-    def setting(self, idx):
-        return self.taps_array[idx]
+        for taps in self.taps_array:
+            setting = []
+            for tap in taps:
+                setting.append([-tap, +tap])
+            retval.append(setting)
+
+        return retval
 
     @property
     def n_settings(self):

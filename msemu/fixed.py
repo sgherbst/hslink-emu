@@ -356,6 +356,23 @@ class Fixed:
     def make(val_or_vals, res, signed):
         return PointFormat.make(res).to_fixed(val_or_vals, signed=signed)
 
+    @staticmethod
+    def cover(formats_iterable):
+        assert isinstance(formats_iterable, collections.Iterable)
+        formats = list(formats_iterable)
+
+        # input checking
+        assert all(format.point==formats[0].point for format in formats[1:])
+        assert all(format.signed == formats[0].signed for format in formats[1:])
+
+        # find minimum and maximum integers that need to be represented
+        min_int = min(format.min_int for format in formats)
+        max_int = max(format.max_int for format in formats)
+
+        # make a format that can represent all of those integers
+        return Fixed(point_fmt=formats[0].point_fmt,
+                     width_fmt=WidthFormat.make([min_int, max_int], signed=formats[0].signed))
+
     # operator overloading
 
     def __add__(self, other):
@@ -384,7 +401,7 @@ class Fixed:
 def main():
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
-    fmt1 = Fixed.make([-3.23, 3.23], 0.0001, signed=True)
+    fmt1 = Fixed.make((-3.23, 3.23), 0.0001, signed=True)
     print(fmt1.bin_str(-0.456))
 
     fmt2 = Fixed.make(7.89, 0.0001, signed=False)

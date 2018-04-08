@@ -15,19 +15,27 @@ class VerilogFormatting:
             raise ValueError('Invalid formatting mode.')
 
     @staticmethod
-    def format_array(vals, kind):
-        retval = "'{"
-        retval += ", ".join(VerilogFormatting.format_single_value(val=val, kind=kind) for val in vals)
-        retval += "}"
-
-        return retval
+    def format(val_or_vals, kind):
+        if isinstance(val_or_vals, (int, float, str)):
+            return VerilogFormatting.format_single_value(val=val_or_vals, kind=kind)
+        elif isinstance(val_or_vals, collections.Iterable):
+            retval = "'{"
+            retval += ", ".join(VerilogFormatting.format(val, kind=kind) for val in val_or_vals)
+            retval += "}"
+            return retval
+        else:
+            raise ValueError('Unsupported type.')
 
     @staticmethod
-    def format(val_or_vals, kind):
-        if isinstance(val_or_vals, collections.Iterable):
-            return VerilogFormatting.format_array(vals=val_or_vals, kind=kind)
+    def get_array_dims(vals):
+        if isinstance(vals, (int, float, str)):
+            return ''
+        elif isinstance(vals, collections.Iterable):
+            subdims = [VerilogFormatting.get_array_dims(val) for val in vals]
+            assert all(subdim==subdims[0] for subdim in subdims)
+            return '[{}]'.format(len(subdims)) + subdims[0]
         else:
-            return VerilogFormatting.format_single_value(val=val_or_vals, kind=kind)
+            raise ValueError('Unsupported type.')
 
 class VerilogConstant:
     def __init__(self, name, value, kind=None):
@@ -42,8 +50,15 @@ class VerilogConstant:
         if self.kind is not None:
             arr.append(self.kind)
         arr.append(self.name)
-        if isinstance(self.value, collections.Iterable):
-            arr.append('[{}]'.format(len(self.value)))
+
+        # add array dimensions if appropriate
+        if isinstance(self.value, (int, float, str)):
+            pass
+        elif isinstance(self.value, collections.Iterable):
+            arr.append(VerilogFormatting.get_array_dims(self.value))
+        else:
+            raise ValueError('Unsupported type.')
+
         arr.append('=')
         arr.append(VerilogFormatting.format(self.value, kind=self.kind))
 

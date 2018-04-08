@@ -8,7 +8,7 @@ import pathlib
 
 from msemu.rf import get_sample_s4p, s4p_to_impulse, imp2step
 from msemu.pwl import Waveform
-from msemu.fixed import Fixed, Signed, Unsigned, PointFormat
+from msemu.fixed import Fixed, PointFormat, WidthFormat
 from msemu.ctle import get_ctle_imp
 from msemu.verilog import VerilogPackage, VerilogConstant
 from msemu.tx_ffe import TxFFE
@@ -79,15 +79,16 @@ def main(plot_dt=1e-12):
 class Emulation:
     def __init__(self,
                  err,                           # error budget
-                 Tstop = 20e-9,                 # stopping time of emulation
-                 Fnom = 8e9,                    # nominal TX frequency
+                 t_stop = 20e-9,                # stopping time of emulation
+                 f_nom = 8e9,                   # nominal TX frequency
                  jitter_pkpk = 10e-12,          # peak-to-peak jitter of TX
                  t_res = 1e-14,                 # smallest time resolution represented
                  t_trunc = 10e-9                # time at which step response is truncated
     ):
+        # save settings
         self.err = err
-        self.Tstop = Tstop
-        self.Fnom = Fnom
+        self.t_stop = t_stop
+        self.f_nom = f_nom
         self.jitter_pkpk = jitter_pkpk
         self.t_res = t_res
         self.t_trunc = t_trunc
@@ -99,8 +100,7 @@ class Emulation:
         self.set_time_format()
 
         # Determine clock representation
-        self.clk_tx = ClockWithJitter(freq=self.Fnom, jitter_pkpk=self.jitter_pkpk, time_fmt=self.time_fmt)
-        self.clk_rx = ClockWithJitter(freq=self.Fnom, jitter_pkpk=self.jitter_pkpk, time_fmt=self.time_fmt, phases=2)
+        self.create_clocks()
 
         # Set points of several signals
         self.set_in_format()
@@ -116,17 +116,37 @@ class Emulation:
         self.set_filter_widths()
 
         # create verilog packages
-        self.create_filter_package()
-        self.create_time_package()
-        self.create_signal_package()
+        self.create_packages()
 
     def set_time_format(self):
         # the following are full formats, with associated widths
-        self.time_fmt = Fixed.make(self.Tstop, self.t_res, Unsigned)
+        self.time_fmt = Fixed.make([0, self.t_stop], self.t_res, signed=False)
+
+    def create_clocks(self):
+        self.clk_tx = ClockWithJitter(freq=self.f_nom, jitter_pkpk=self.jitter_pkpk, time_fmt=self.time_fmt)
+        self.clk_rx = ClockWithJitter(freq=self.f_nom, jitter_pkpk=self.jitter_pkpk, time_fmt=self.time_fmt, phases=2)
 
     def set_in_format(self):
-        # the following are full formats, with associated widths
-        self.in_fmt = Fixed.make([-self.R_in, self.R_in], self.err.in_*self.R_in, Signed)
+        self.tx_ffe = TxFFE()
+
+        # compute input point format
+        self.R_in = max(sum(abs(tap) for tap in taps) for taps in self.tx_ffe.taps_array)
+        self.in_point_fmt = PointFormat.make(self.err.in_*self.R_in)
+
+        # compute tap representations
+        format_tap_pair = lambda tap_pair: self.in_point_fmt.to_fixed(tap_pair, signed=True)
+        format_setting = lambda setting: list(map(format_tap_pair, setting))
+        setting_fmts = list(map(format_setting, self.tx_ffe.settings))
+
+        # define the input format
+        self.in_fmt = Fixed.cover(sum(setting_fmt) for setting_fmt in setting_fmts)
+
+        # define the tap format
+        self.tap_fmt = Fixed.cover(Fixed.cover(setting_fmt) for setting_fmt in setting_fmts)
+
+        # log the results
+        logging.debug('TX tap range: {} to {}'.format(self.tap_fmt.min_float, self.tap_fmt.max_float))
+        logging.debug('Input range: {} to {}'.format(self.in_fmt.min_float, self.in_fmt.max_float))
 
     def set_filter_points(self):
         self.step_point_fmt = PointFormat.make(self.err.step*self.step.yss)
@@ -134,19 +154,31 @@ class Emulation:
 
     def set_filter_widths(self):
         # bound the step responses
-        filter_pwl_out_fmts = [filter_pwl_table.out_fmt for filter_pwl_table in self.filter_pwl_tables]
-        self.step_fmt = max(filter_pwl_out_fmts, key = lambda out_fmt: out_fmt.n)
+        step_fmts = [filter_pwl_table.out_fmt for filter_pwl_table in self.filter_pwl_tables]
+        self.step_fmt = Fixed.cover(step_fmts)
 
         # set the pulse format
-        self.pulse_fmt = self.step_fmt - self.step_fmt
+        pulse_fmts = []
+        for k, step_fmt in enumerate(step_fmts):
+            if k==0:
+                pulse_fmts.append(step_fmt)
+            else:
+                pulse_fmts.append(step_fmt - step_fmts[k-1])
+        self.pulse_fmt = Fixed.cover(pulse_fmts)
 
         # set the product format
-        self.prod_fmt = (self.pulse_fmt * self.in_fmt).align_to(self.prod_point_fmt.point)
+        self.prod_fmts = [(pulse_fmt * self.in_fmt).align_to(self.prod_point_fmt.point)
+                          for pulse_fmt in pulse_fmts]
+        self.prod_fmt = Fixed.cover(self.prod_fmts)
 
         # set the output format
-        self.out_fmt = Fixed(point_fmt=self.prod_fmt,
-                             width_fmt=Signed.make([self.num_ui*self.prod_fmt.min_int,
-                                                    self.num_ui*self.prod_fmt.max_int]))
+        self.out_fmt = sum(self.prod_fmts)
+
+        # print results for debugging
+        logging.debug('Step range: {} to {}'.format(self.step_fmt.min_float, self.step_fmt.max_float))
+        logging.debug('Pulse range: {} to {}'.format(self.pulse_fmt.min_float, self.pulse_fmt.max_float))
+        logging.debug('Product range: {} to {}'.format(self.prod_fmt.min_float, self.prod_fmt.max_float))
+        logging.debug('Output range: {} to {}'.format(self.out_fmt.min_float, self.out_fmt.max_float))
 
     def set_num_ui(self):
         # Determine number of UIs required to ensure the full step response is covered
@@ -158,7 +190,8 @@ class Emulation:
 
         # Set the format for the time history in the filter
         dt_max_int = self.num_ui * self.clk_tx.T_max_int
-        self.dt_fmt = Fixed(point_fmt=self.time_fmt.point_fmt, width_fmt=Unsigned.make(dt_max_int))
+        self.dt_fmt = Fixed(point_fmt=self.time_fmt.point_fmt,
+                            width_fmt=WidthFormat.make([0, dt_max_int], signed=False))
 
     def create_filter_pwl_tables(self, rom_dir='roms'):
         # create rom directory if necessary
@@ -181,7 +214,7 @@ class Emulation:
         dt_stop_int = (k+1)*self.clk_tx.T_max_int
 
         # compute number of bits going into the PWL, after subtracting off dt_start_int
-        pwl_time_bits = Unsigned.width(dt_stop_int - dt_start_int)
+        pwl_time_bits = WidthFormat.width(dt_stop_int - dt_start_int, signed=False)
 
         # set tolerance for approximation by pwl segments
         pwl_tol = self.err.pwl * self.step.yss
@@ -190,9 +223,9 @@ class Emulation:
         rom_addr_bits = 1
         while (rom_addr_bits <= addr_bits_max) and (rom_addr_bits < pwl_time_bits):
             # compute the pwl addr format
-            high_bits_fmt = Fixed(width_fmt=Unsigned(rom_addr_bits),
+            high_bits_fmt = Fixed(width_fmt=WidthFormat(rom_addr_bits, signed=False),
                                   point_fmt=PointFormat(self.time_fmt.point - (pwl_time_bits - rom_addr_bits)))
-            low_bits_fmt = Fixed(width_fmt=Unsigned(pwl_time_bits - rom_addr_bits),
+            low_bits_fmt = Fixed(width_fmt=WidthFormat(pwl_time_bits-rom_addr_bits, signed=False),
                                  point_fmt=self.time_fmt.point_fmt)
 
             # calculate a list of times for the segment start times
@@ -227,6 +260,9 @@ class Emulation:
         pack.add_fixed_format(self.step_fmt, 'FILTER_STEP')
         pack.add_fixed_format(self.pulse_fmt, 'FILTER_PULSE')
         pack.add_fixed_format(self.prod_fmt, 'FILTER_PROD')
+        pack.add(VerilogConstant(name='FILTER_PROD_WIDTHS',
+                                 value=[prod_fmt.n for prod_fmt in self.prod_fmts],
+                                 kind='int'))
 
         # PWL-specific definitions
         pack.add(VerilogConstant(name='FILTER_ROM_PATHS', value=self.filter_rom_paths, kind='string'))
@@ -263,7 +299,7 @@ class Emulation:
 
         pack.add(VerilogConstant(name='TX_INC', value=self.clk_tx.T_nom_int, kind='longint'))
         pack.add(VerilogConstant(name='RX_INC', value=self.clk_rx.T_nom_int, kind='longint'))
-        pack.add(VerilogConstant(name='TIME_STOP', value=self.time_fmt.intval(self.Tstop), kind='longint'))
+        pack.add(VerilogConstant(name='TIME_STOP', value=self.time_fmt.intval(self.t_stop), kind='longint'))
 
         self.time_package = pack
 
@@ -275,10 +311,34 @@ class Emulation:
 
         self.signal_package = pack
 
+    def create_tx_package(self, name='tx_package'):
+        pack = VerilogPackage(name=name)
+
+        pack.add_fixed_format(self.tap_fmt, 'TAP')
+        pack.add(VerilogConstant(name='N_SETTINGS', value=self.tx_ffe.n_settings, kind='int'))
+        pack.add(VerilogConstant(name='N_TAPS', value=self.tx_ffe.n_taps, kind='int'))
+
+        # compute tx taps as integers
+        tx_tap_intvals_plus = [[self.tap_fmt.intval(tap) for tap in taps] for taps in self.tx_ffe.taps_array]
+        tx_tap_intvals_minus = [[self.tap_fmt.intval(-tap) for tap in taps] for taps in self.tx_ffe.taps_array]
+
+        # add them to the package
+        pack.add(VerilogConstant(name='TX_TAPS_PLUS', value=tx_tap_intvals_plus, kind='longint'))
+        pack.add(VerilogConstant(name='TX_TAPS_MINUS', value=tx_tap_intvals_minus, kind='longint'))
+
+        self.tx_package = pack
+
+    def create_packages(self):
+        self.create_filter_package()
+        self.create_time_package()
+        self.create_signal_package()
+        self.create_tx_package()
+
     def write_packages(self):
         self.filter_package.write_to_file()
         self.time_package.write_to_file()
         self.signal_package.write_to_file()
+        self.tx_package.write_to_file()
 
     def write_rom_files(self):
         self.write_filter_rom_files()
@@ -304,39 +364,38 @@ class PwlTable:
         bias_float = (min(self.pwl.offsets)+max(self.pwl.offsets))/2
         self.bias_int = self.offset_point_fmt.intval(bias_float)
         self.bias_fmt = Fixed(point_fmt=self.offset_point_fmt,
-                              width_fmt=Signed.make(self.bias_int))
+                              width_fmt=WidthFormat.make(self.bias_int, signed=True))
 
         # determine offset representation
         offset_floats = [offset - bias_float for offset in self.pwl.offsets]
         self.offset_ints = [self.offset_point_fmt.intval(offset_float) for offset_float in offset_floats]
-        self.offset_fmt = Fixed(point_fmt=self.offset_point_fmt,
-                                width_fmt=Signed.make(self.offset_ints))
+        offset_fmts = [Fixed(point_fmt=self.offset_point_fmt,
+                             width_fmt=WidthFormat.make(offset_int, signed=True))
+                       for offset_int in self.offset_ints]
+        self.offset_fmt = Fixed.cover(offset_fmts)
 
         # determine slope representation
         self.slope_ints = [self.slope_point_fmt.intval(slope) for slope in self.pwl.slopes]
-        self.slope_fmt = Fixed(point_fmt=self.slope_point_fmt,
-                               width_fmt=Signed.make(self.slope_ints))
+        slope_fmts = [Fixed(point_fmt=self.slope_point_fmt,
+                            width_fmt=WidthFormat.make(slope_int, signed=True))
+                      for slope_int in self.slope_ints]
+        self.slope_fmt = Fixed.cover(slope_fmts)
 
-    def to_table_str(self):
-        retval = ''
+        # determine output representation of output
+        out_fmts = []
 
-        for offset_int, slope_int in zip(self.offset_ints, self.slope_ints):
-            retval += self.offset_fmt.width_fmt.bin_str(offset_int)
-            retval += self.slope_fmt.width_fmt.bin_str(slope_int)
-            retval += '\n'
+        for offset_fmt, slope_fmt in zip(offset_fmts, slope_fmts):
+            out_fmts.append(  self.bias_fmt
+                            + offset_fmt
+                            + (slope_fmt*self.low_bits_fmt.to_signed()).align_to(self.offset_point_fmt.point))
 
-        return retval
+        self.out_fmt = Fixed.cover(out_fmts)
 
     def write_table(self, fname):
-        table_str = self.to_table_str()
         with open(fname, 'w') as f:
-            f.write(table_str)
-
-    @property
-    def out_fmt(self):
-        return (self.bias_fmt
-                + self.offset_fmt
-                + (self.slope_fmt*self.low_bits_fmt.to_signed()).align_to(self.offset_point_fmt.point))
+            for offset_str, slope_str in zip(self.offset_fmt.width_fmt.bin_str(self.offset_ints),
+                                             self.slope_fmt.width_fmt.bin_str(self.slope_ints)):
+                f.write(offset_str+slope_str+'\n')
 
     @property
     def table_size_bits(self):
@@ -348,7 +407,7 @@ class ClockWithJitter:
         self.time_fmt = time_fmt
 
         # compute jitter format
-        self.jitter_fmt = time_fmt.point_fmt.to_fixed([-jitter_pkpk/2, jitter_pkpk/2], Signed)
+        self.jitter_fmt = time_fmt.point_fmt.to_fixed([-jitter_pkpk/2, jitter_pkpk/2], signed=True)
 
         # compute main time format
         self.T_nom_int = time_fmt.intval(1/(phases*freq))
