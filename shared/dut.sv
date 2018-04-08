@@ -2,6 +2,7 @@
 
 import time_package::*;
 import signal_package::*;
+import filter_package::*;
 
 module dut(
     input wire SYSCLK_P,
@@ -33,7 +34,8 @@ module dut(
     tx_driver tx_drv_i(.in(out_tx), .out(sig_tx), .clk(clk_tx));
 
     // filter data stream according to channel + CTLE dynamics
-    filter filter_i(.in(sig_tx), .time_eq_in(time_eq_tx), .out(sig_rx), .clk_sys(clk_sys), .time_next(time_next));
+    wire [RX_SETTING_WIDTH-1:0] rx_setting = `RX_SETTING;
+    filter filter_i(.in(sig_tx), .time_eq_in(time_eq_tx), .out(sig_rx), .clk_sys(clk_sys), .time_next(time_next), .rx_setting(rx_setting));
 
     // create RX clock
     const_clock #(.N(2), .INC(RX_INC)) rx_clk_i(.clk_orig(clk_orig), .clk_sys(clk_sys), .time_next(time_next), .time_clock(time_in[1]), .clk_out({clk_rx_p, clk_rx_n}), .time_eq(time_eq_rx));

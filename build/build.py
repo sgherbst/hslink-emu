@@ -423,9 +423,17 @@ class PwlTable:
 
     def write_table(self, fname):
         with open(fname, 'w') as f:
-            for setting in range(self.n_settings):
-                for offset_str, slope_str in zip(self.offset_fmt.width_fmt.bin_str(self.offset_ints[setting]),
-                                                 self.slope_fmt.width_fmt.bin_str(self.slope_ints[setting])):
+            n_settings_pow_2 = 1<<int(ceil(log2(self.n_settings)))
+            for setting in range(n_settings_pow_2):
+                if setting < self.n_settings:
+                    offset_ints = self.offset_ints[setting]
+                    slope_ints = self.slope_ints[setting]
+                else:
+                    offset_ints = [0]*self.n_segments
+                    slope_ints = [0]*self.n_segments
+
+                for offset_str, slope_str in zip(self.offset_fmt.width_fmt.bin_str(offset_ints),
+                                                 self.slope_fmt.width_fmt.bin_str(slope_ints)):
                     f.write(offset_str+slope_str+'\n')
 
     @property

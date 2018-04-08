@@ -1,5 +1,7 @@
 `timescale 1ns/1ps
 
+import filter_package::*;
+
 module pwl #(
     parameter rom_name = "rom.mem",
     parameter n_settings = 1,
@@ -10,11 +12,11 @@ module pwl #(
     parameter addr_offset = 1,
     parameter segment_width = 1,
     parameter offset_width = 1,
-    parameter longint bias_vals [n_settings] = '{1},
     parameter slope_width = 1,
     parameter slope_point = 1,
     parameter out_width = 1,
-    parameter out_point = 1
+    parameter out_point = 1,
+    parameter k = 0
 )(
     input [in_width-1:0] in,
     output signed [out_width-1:0] out,
@@ -62,6 +64,5 @@ module pwl #(
                                              .c(prod));
   
     // assign output as sum of linear correction, offset from ROM, and a bias value
-    assign out = offset + prod + bias_val[setting];
-//    assign out = offset + bias_val;
+    assign out = offset + prod + FILTER_BIAS_VALS[k][setting];
 endmodule

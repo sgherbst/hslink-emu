@@ -9,7 +9,8 @@ module filter (
     input wire time_eq_in,
     output FILTER_OUT_FORMAT out,
     input wire clk_sys,
-    input TIME_FORMAT time_next
+    input TIME_FORMAT time_next,
+    input [RX_SETTING_WIDTH-1:0] rx_setting
 );
     // verilog idiosyncracy, needed to initialize arrays to zero
     localparam signed [FILTER_IN_WIDTH-1:0] value_hist_zero = 0;
@@ -59,14 +60,14 @@ module filter (
                   .addr_offset(FILTER_ADDR_OFFSETS[k]),
                   .segment_width(FILTER_SEGMENT_WIDTHS[k]),
                   .offset_width(FILTER_OFFSET_WIDTHS[k]),
-                  .bias_vals(FILTER_BIAS_VALS[k]),
+                  .k(k),
                   .slope_width(FILTER_SLOPE_WIDTHS[k]),
                   .slope_point(FILTER_SLOPE_POINTS[k]),
                   .out_width(FILTER_STEP_WIDTH),
                   .out_point(FILTER_STEP_POINT)) pwl_k (.in(pwl_in[k]), 
                                                         .clk(clk_sys),
                                                         .out(steps[k]),
-                                                        .setting(`RX_SETTING));
+                                                        .setting(rx_setting));
 
             // Pulse responses
             if (k == 0) begin
