@@ -5,6 +5,7 @@ from math import ceil, floor, log2
 import logging, sys
 import os.path
 import pathlib
+import collections
 
 from msemu.rf import get_sample_s4p, s4p_to_impulse, imp2step
 from msemu.pwl import Waveform
@@ -49,7 +50,7 @@ def main(plot_dt=1e-12):
     plt.clf()
 
     # Plot number of segments for PWLs
-    seg_per_pulse = np.array([filter_pwl_table.pwl.n for filter_pwl_table in emu.filter_pwl_tables])
+    seg_per_pulse = np.array([filter_pwl_table.n_segments for filter_pwl_table in emu.filter_pwl_tables])
     plt.plot(seg_per_pulse)
     plt.xlabel('Step Response #')
     plt.ylabel('PWL Segments')
@@ -64,17 +65,19 @@ def main(plot_dt=1e-12):
     plt.savefig('pwl_data_width.pdf')
     plt.clf()
 
-    # Plot step response
-    plt.plot(emu.step.t, emu.step.v)
+    # Plot first step response
+    for k, step in enumerate(emu.steps):
+        plt.plot(step.t, step.v)
 
-    for filter_pwl_table in emu.filter_pwl_tables:
-        pwl = filter_pwl_table.pwl
-        t_eval = pwl.domain(plot_dt)
-        plt.plot(t_eval, pwl.eval(t_eval))
-    plt.xlabel('Time')
-    plt.ylabel('Value')
-    plt.savefig('step_resp.pdf')
-    plt.clf()
+        for filter_pwl_table in emu.filter_pwl_tables:
+            pwl = filter_pwl_table.pwls[k]
+            t_eval = pwl.domain(plot_dt)
+            plt.plot(t_eval, pwl.eval(t_eval))
+
+        plt.xlabel('Time')
+        plt.ylabel('Value')
+        plt.savefig('step_resp_{}.pdf'.format(k))
+        plt.clf()
 
 class Emulation:
     def __init__(self,
@@ -93,8 +96,10 @@ class Emulation:
         self.t_res = t_res
         self.t_trunc = t_trunc
 
-        # Get the step response
-        self.step = get_combined_step()
+        # Get the step responses and record the minimum steady-state value,
+        # which sets precision requirements throughout the design
+        self.steps = get_combined_step([-4])
+        self.yss = min(step.yss for step in self.steps)
 
         # Compute time format
         self.set_time_format()
@@ -149,8 +154,8 @@ class Emulation:
         logging.debug('Input range: {} to {}'.format(self.in_fmt.min_float, self.in_fmt.max_float))
 
     def set_filter_points(self):
-        self.step_point_fmt = PointFormat.make(self.err.step*self.step.yss)
-        self.prod_point_fmt = PointFormat.make(self.err.prod*self.step.yss*self.R_in)
+        self.step_point_fmt = PointFormat.make(self.err.step*self.yss)
+        self.prod_point_fmt = PointFormat.make(self.err.prod*self.yss*self.R_in)
 
     def set_filter_widths(self):
         # bound the step responses
@@ -217,7 +222,7 @@ class Emulation:
         pwl_time_bits = WidthFormat.width(dt_stop_int - dt_start_int, signed=False)
 
         # set tolerance for approximation by pwl segments
-        pwl_tol = self.err.pwl * self.step.yss
+        pwl_tol = self.err.pwl * self.yss
 
         # iterate over the number of ROM address bits
         rom_addr_bits = 1
@@ -232,10 +237,10 @@ class Emulation:
             times = dt_start_int*self.time_fmt.res + (np.arange(high_bits_fmt.width_fmt.max+1)*high_bits_fmt.res)
 
             # build pwl table
-            pwl = self.step.make_pwl(times=times)
+            pwls = [step.make_pwl(times=times) for step in self.steps]
 
-            if pwl.error <= pwl_tol:
-                return PwlTable(pwl=pwl,
+            if all(pwl.error <= pwl_tol for pwl in pwls):
+                return PwlTable(pwls=pwls,
                                 high_bits_fmt = high_bits_fmt,
                                 low_bits_fmt = low_bits_fmt,
                                 addr_offset_int = dt_start_int,
@@ -255,6 +260,12 @@ class Emulation:
 
         # number of UI
         pack.add(VerilogConstant(name='NUM_UI', value=self.num_ui, kind='int'))
+
+        # RX CTLE settings
+        pack.add(VerilogConstant(name='NUM_RX_SETTINGS', value=len(self.steps), kind='int'))
+        pack.add(VerilogConstant(name='RX_SETTING_WIDTH',
+                                 value=int(ceil(log2(len(self.steps)))),
+                                 kind='int'))
 
         # add value formats
         pack.add_fixed_format(self.step_fmt, 'FILTER_STEP')
@@ -279,7 +290,7 @@ class Emulation:
                                  value=[filter_pwl_table.offset_fmt.n for filter_pwl_table in self.filter_pwl_tables],
                                  kind='int'))
         pack.add(VerilogConstant(name='FILTER_BIAS_VALS',
-                                 value=[filter_pwl_table.bias_int for filter_pwl_table in self.filter_pwl_tables],
+                                 value=[filter_pwl_table.bias_ints for filter_pwl_table in self.filter_pwl_tables],
                                  kind='int'))
         pack.add(VerilogConstant(name='FILTER_SLOPE_WIDTHS',
                                  value=[filter_pwl_table.slope_fmt.n for filter_pwl_table in self.filter_pwl_tables],
@@ -344,9 +355,9 @@ class Emulation:
         self.write_filter_rom_files()
 
 class PwlTable:
-    def __init__(self, pwl, high_bits_fmt, low_bits_fmt, addr_offset_int, offset_point_fmt, slope_point_fmt):
+    def __init__(self, pwls, high_bits_fmt, low_bits_fmt, addr_offset_int, offset_point_fmt, slope_point_fmt):
         # save settings
-        self.pwl = pwl
+        self.pwls = pwls
         self.high_bits_fmt = high_bits_fmt
         self.low_bits_fmt = low_bits_fmt
         self.addr_offset_int = addr_offset_int
@@ -354,52 +365,72 @@ class PwlTable:
         self.slope_point_fmt = slope_point_fmt
 
         # check input validity
-        assert np.isclose(self.high_bits_fmt.res, self.pwl.dtau)
+        assert all(np.isclose(pwl.dtau, self.high_bits_fmt.res) for pwl in self.pwls)
 
         # set up the format of the ROM
         self.set_rom_fmt()
 
+    @property
+    def n_segments(self):
+        n_segments_0 = self.pwls[0].n
+        assert all(pwl.n == n_segments_0 for pwl in self.pwls)
+        return n_segments_0
+
+    @property
+    def n_settings(self):
+        return len(self.pwls)
+
     def set_rom_fmt(self):
         # determine the bias
-        bias_float = (min(self.pwl.offsets)+max(self.pwl.offsets))/2
-        self.bias_int = self.offset_point_fmt.intval(bias_float)
-        self.bias_fmt = Fixed(point_fmt=self.offset_point_fmt,
-                              width_fmt=WidthFormat.make(self.bias_int, signed=True))
+        bias_floats = [min(pwl.offsets)+max(pwl.offsets)/2 for pwl in self.pwls]
+        self.bias_ints = self.offset_point_fmt.intval(bias_floats)
+        bias_fmts = [Fixed(point_fmt=self.offset_point_fmt,
+                           width_fmt=WidthFormat.make(bias_int, signed=True))
+                     for bias_int in self.bias_ints]
+        self.bias_fmt = Fixed.cover(bias_fmts)
 
         # determine offset representation
-        offset_floats = [offset - bias_float for offset in self.pwl.offsets]
-        self.offset_ints = [self.offset_point_fmt.intval(offset_float) for offset_float in offset_floats]
-        offset_fmts = [Fixed(point_fmt=self.offset_point_fmt,
-                             width_fmt=WidthFormat.make(offset_int, signed=True))
-                       for offset_int in self.offset_ints]
-        self.offset_fmt = Fixed.cover(offset_fmts)
+        offset_floats = [[offset - bias_float for offset in pwl.offsets]
+                         for pwl, bias_float in zip(self.pwls, bias_floats)]
+        self.offset_ints = [self.offset_point_fmt.intval(setting)
+                            for setting in offset_floats]
+        offset_fmts = [[Fixed(point_fmt=self.offset_point_fmt,
+                              width_fmt=WidthFormat.make(offset_int, signed=True))
+                        for offset_int in setting]
+                       for setting in self.offset_ints]
+        self.offset_fmt = Fixed.cover(Fixed.cover(setting) for setting in offset_fmts)
 
         # determine slope representation
-        self.slope_ints = [self.slope_point_fmt.intval(slope) for slope in self.pwl.slopes]
-        slope_fmts = [Fixed(point_fmt=self.slope_point_fmt,
-                            width_fmt=WidthFormat.make(slope_int, signed=True))
-                      for slope_int in self.slope_ints]
-        self.slope_fmt = Fixed.cover(slope_fmts)
+        self.slope_ints = [self.slope_point_fmt.intval(pwl.slopes)
+                           for pwl in self.pwls]
+        slope_fmts = [[Fixed(point_fmt=self.slope_point_fmt,
+                             width_fmt=WidthFormat.make(slope_int, signed=True))
+                       for slope_int in setting]
+                      for setting in self.slope_ints]
+        self.slope_fmt = Fixed.cover(Fixed.cover(setting) for setting in slope_fmts)
 
         # determine output representation of output
         out_fmts = []
 
-        for offset_fmt, slope_fmt in zip(offset_fmts, slope_fmts):
-            out_fmts.append(  self.bias_fmt
-                            + offset_fmt
-                            + (slope_fmt*self.low_bits_fmt.to_signed()).align_to(self.offset_point_fmt.point))
+        for setting in range(self.n_settings):
+            for offset_fmt, slope_fmt in zip(offset_fmts[setting],
+                                             slope_fmts[setting]):
+                out_fmts.append(bias_fmts[setting]
+                                + offset_fmt
+                                + (slope_fmt * self.low_bits_fmt.to_signed()).align_to(self.offset_point_fmt.point))
 
         self.out_fmt = Fixed.cover(out_fmts)
 
     def write_table(self, fname):
         with open(fname, 'w') as f:
-            for offset_str, slope_str in zip(self.offset_fmt.width_fmt.bin_str(self.offset_ints),
-                                             self.slope_fmt.width_fmt.bin_str(self.slope_ints)):
-                f.write(offset_str+slope_str+'\n')
+            for setting in range(self.n_settings):
+                for offset_str, slope_str in zip(self.offset_fmt.width_fmt.bin_str(self.offset_ints[setting]),
+                                                 self.slope_fmt.width_fmt.bin_str(self.slope_ints[setting])):
+                    f.write(offset_str+slope_str+'\n')
 
     @property
     def table_size_bits(self):
-        return self.pwl.n * (self.offset_fmt.n + self.slope_fmt.n)
+        return self.n_settings * self.n_segments * (self.offset_fmt.n + self.slope_fmt.n)
 
 class ClockWithJitter:
     def __init__(self, freq, jitter_pkpk, time_fmt, phases=1):
@@ -441,21 +472,37 @@ class ClockWithJitter:
     def T_max_float(self):
         return self.T_max_int * self.time_fmt.res
 
-def get_combined_step(db=-4, dt=0.1e-12, T=20e-9):
+def get_combined_step(db_val_or_vals=-4, dt=0.1e-12, T=20e-9):
+    if isinstance(db_val_or_vals, collections.Iterable):
+        db_vals = db_val_or_vals
+    else:
+        db_vals = [db_val_or_vals]
+
     # get channel impulse response
     s4p = get_sample_s4p()
     t, imp_ch = s4p_to_impulse(s4p, dt, T)
 
-    # get ctle impulse response
-    _, imp_ctle = get_ctle_imp(dt, T, db=db)
+    # generate all of the requested step responses
+    steps = []
+    for db_val in db_vals:
+        logging.debug('Generating impulse response with dB={:.1f}'.format(db_val))
 
-    # compute combined impulse response
-    imp_eff = fftconvolve(imp_ch, imp_ctle)[:len(t)]*dt
-    
-    # compute resulting step response
-    step = Waveform(t=t, v=imp2step(imp=imp_eff, dt=dt))
+        # get ctle impulse response for this db value
+        _, imp_ctle = get_ctle_imp(dt, T, db=db_val)
 
-    return step
+        # compute combined impulse response
+        imp_eff = fftconvolve(imp_ch, imp_ctle)[:len(t)]*dt
+
+        # compute resulting step response
+        step = Waveform(t=t, v=imp2step(imp=imp_eff, dt=dt))
+
+        # store the step response
+        steps.append(step)
+
+    if isinstance(db_val_or_vals, collections.Iterable):
+        return steps
+    else:
+        return steps[0]
 
 if __name__=='__main__':
     main()

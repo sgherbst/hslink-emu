@@ -1,5 +1,5 @@
 import logging, sys
-from math import log, ceil, floor, log2
+from math import ceil, floor, log2
 import collections
 
 def listify(val_or_vals):
