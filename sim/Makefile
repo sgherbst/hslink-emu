@@ -2,7 +2,7 @@
 
 PYTHON := python3
 
-RX_SETTING := 0
+RX_SETTING := 3
 
 BUILD_DIR := ../build/
 SHARED_DIR := ../shared/
@@ -27,7 +27,7 @@ sim_filter_pwl:
 	$(NCVERILOG) $(PACKAGES) filter_pwl_test.sv $(LIBS) $(INCS) $(OTHER_OPTS) $(TCL_CMD)
 
 check:
-	$(PYTHON) check.py
+	$(PYTHON) check.py --rx_setting $(RX_SETTING)
 
 check_filter_pwl:
 	$(PYTHON) check_filter_pwl.py

@@ -10,7 +10,7 @@ import collections
 from msemu.rf import get_sample_s4p, s4p_to_impulse, imp2step
 from msemu.pwl import Waveform
 from msemu.fixed import Fixed, PointFormat, WidthFormat
-from msemu.ctle import get_ctle_imp
+from msemu.ctle import RxCTLE
 from msemu.verilog import VerilogPackage, VerilogConstant
 from msemu.tx_ffe import TxFFE
 
@@ -98,7 +98,12 @@ class Emulation:
 
         # Get the step responses and record the minimum steady-state value,
         # which sets precision requirements throughout the design
-        self.steps = get_combined_step([-4])
+        self.rx_ctle = RxCTLE()
+        self.steps = []
+        for setting in range(self.rx_ctle.n_settings):
+            logging.debug('Computing step response for dB={:0.1f}'.format(self.rx_ctle.db_vals[setting]))
+            step = self.rx_ctle.get_combined_step(setting)
+            self.steps.append(step)
         self.yss = min(step.yss for step in self.steps)
 
         # Compute time format
@@ -382,7 +387,7 @@ class PwlTable:
 
     def set_rom_fmt(self):
         # determine the bias
-        bias_floats = [min(pwl.offsets)+max(pwl.offsets)/2 for pwl in self.pwls]
+        bias_floats = [(min(pwl.offsets)+max(pwl.offsets))/2 for pwl in self.pwls]
         self.bias_ints = self.offset_point_fmt.intval(bias_floats)
         bias_fmts = [Fixed(point_fmt=self.offset_point_fmt,
                            width_fmt=WidthFormat.make(bias_int, signed=True))
@@ -479,38 +484,6 @@ class ClockWithJitter:
     @property
     def T_max_float(self):
         return self.T_max_int * self.time_fmt.res
-
-def get_combined_step(db_val_or_vals=-4, dt=0.1e-12, T=20e-9):
-    if isinstance(db_val_or_vals, collections.Iterable):
-        db_vals = db_val_or_vals
-    else:
-        db_vals = [db_val_or_vals]
-
-    # get channel impulse response
-    s4p = get_sample_s4p()
-    t, imp_ch = s4p_to_impulse(s4p, dt, T)
-
-    # generate all of the requested step responses
-    steps = []
-    for db_val in db_vals:
-        logging.debug('Generating impulse response with dB={:.1f}'.format(db_val))
-
-        # get ctle impulse response for this db value
-        _, imp_ctle = get_ctle_imp(dt, T, db=db_val)
-
-        # compute combined impulse response
-        imp_eff = fftconvolve(imp_ch, imp_ctle)[:len(t)]*dt
-
-        # compute resulting step response
-        step = Waveform(t=t, v=imp2step(imp=imp_eff, dt=dt))
-
-        # store the step response
-        steps.append(step)
-
-    if isinstance(db_val_or_vals, collections.Iterable):
-        return steps
-    else:
-        return steps[0]
 
 if __name__=='__main__':
     main()

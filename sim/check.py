@@ -7,9 +7,9 @@ from scipy.stats import describe
 from math import floor
 import os.path
 import sys
+import argparse
 
-from msemu.ctle import get_ctle_imp
-from msemu.rf import get_sample_s4p, s4p_to_impulse
+from msemu.ctle import RxCTLE
 from msemu.pwl import Waveform
 
 class SimResult:
@@ -21,23 +21,16 @@ class SimResult:
         self.in_ = in_
         self.out = out
 
-def get_imp_eff():
-    # get the exact step response used in the build script
-    import_path = os.path.dirname(os.path.realpath(__file__))
-    import_path = os.path.join(import_path, os.path.pardir, 'build')
-    import_path = os.path.realpath(import_path)
-    print(import_path)
-    sys.path.append(import_path)
-    from build.build import get_combined_step
-
+def get_imp_eff(rx_setting):
     # compute the impulse response
-    step = get_combined_step()
+    rx_ctle = RxCTLE()
+    step = rx_ctle.get_combined_step(rx_setting)
     v_new = np.diff(step.v)/step.dt
     t_new = step.t[:-1]    
 
     return Waveform(t=t_new, v=v_new)
 
-def eval():
+def eval(rx_setting):
     # read tx data
     data_tx = genfromtxt('tx.txt', delimiter=',')
     t_tx = data_tx[:, 0]
@@ -54,7 +47,7 @@ def eval():
     rxn = Waveform(t=data_rxn[:, 0], v=data_rxn[:, 1])
 
     # get impulse response of channel
-    imp = get_imp_eff()
+    imp = get_imp_eff(rx_setting)
 
     # interpolate input to impulse response timebase
     count = int(floor(tx.t[-1]/imp.dt))+1
@@ -108,7 +101,11 @@ def plot(result):
     plt.show()
 
 def main():
-    result = eval()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--rx_setting', type=int, help='Setting of the RX CTLE.')
+    args = parser.parse_args()
+
+    result = eval(args.rx_setting)
 
     measure_error(result)
     plot(result)
