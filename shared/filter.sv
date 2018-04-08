@@ -89,5 +89,8 @@ module filter (
     endgenerate
 
     // sum all of the terms together
-    mysum #(.in_bits(FILTER_PROD_WIDTH), .in_terms(NUM_UI), .out_bits(FILTER_OUT_WIDTH)) sum_i(.in(prods), .out(out));
+    mysum #(.in_bits(FILTER_PROD_WIDTH), 
+            .in_terms(NUM_UI), 
+            .out_bits(FILTER_OUT_WIDTH)) sum_i (.in(prods), 
+                                                .out(out));
 endmodule

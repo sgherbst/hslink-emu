@@ -2,7 +2,7 @@
 
 PYTHON := python3
 
-RX_SETTING := 3
+RX_SETTING := 0
 
 BUILD_DIR := ../build/
 SHARED_DIR := ../shared/
