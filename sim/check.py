@@ -31,7 +31,7 @@ def get_imp_eff():
     from build.build import get_combined_step
 
     # compute the impulse response
-    step, _ = get_combined_step()
+    step = get_combined_step()
     v_new = np.diff(step.v)/step.dt
     t_new = step.t[:-1]    
 
