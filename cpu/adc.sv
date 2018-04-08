@@ -10,6 +10,9 @@ module adc #(
     input TIME_FORMAT time_curr,
     input wire signed [sig_bits-1:0] sig
 );
+
+`ifndef PROFILE
+
     integer f;
     initial begin
         f = $fopen({name, ext}, "w");
@@ -31,4 +34,7 @@ module adc #(
                     real'(sig)/(real'(2)**real'(sig_point)));
         end
     end
+
+`endif
+
 endmodule

@@ -11,17 +11,20 @@ module filter (
     input wire clk_sys,
     input TIME_FORMAT time_next
 );
-    genvar k;
+    // verilog idiosyncracy, needed to initialize arrays to zero
+    localparam signed [FILTER_IN_WIDTH-1:0] value_hist_zero = 0;
+    localparam signed [FILTER_IN_WIDTH-1:0] time_hist_zero = 0;
 
     // generate input history
-    FILTER_IN_FORMAT value_hist [NUM_UI];
-    DT_FORMAT time_hist [NUM_UI];
+    FILTER_IN_FORMAT value_hist [NUM_UI] = '{(NUM_UI){value_hist_zero}};
+    DT_FORMAT time_hist [NUM_UI] = '{(NUM_UI){time_hist_zero}};
     
     reg time_eq_in_d = 1'b0;
     always @(posedge clk_sys) begin
         time_eq_in_d <= time_eq_in;
     end
 
+    genvar k;
     generate
         for (k=0; k<NUM_UI; k=k+1) begin : gen_input_hist
             if (k==0) begin
@@ -40,6 +43,7 @@ module filter (
     FILTER_PULSE_FORMAT pulses [NUM_UI];
     FILTER_PROD_FORMAT prods [NUM_UI];
 
+    // note that genvar k is reused from above...
     generate
         for (k=0; k<NUM_UI; k=k+1) begin : gen_pwl_blocks
             // PWL input time
