@@ -2,6 +2,8 @@
 
 PYTHON := python3
 
+RX_SETTING := 0
+
 BUILD_DIR := ../build/
 SHARED_DIR := ../shared/
 CPU_DIR := ../cpu/
@@ -11,7 +13,7 @@ NCVERILOG := ncverilog
 LIBS := -y $(SHARED_DIR) -y $(CPU_DIR)
 INCS := 
 TCL_CMD := -input hdl.tcl
-OTHER_OPTS := +libext+.sv +nctimescale+1ns/1ps -sv +nc64bit +ncaccess+rwc
+OTHER_OPTS := +libext+.sv +nctimescale+1ns/1ps -sv +nc64bit +ncaccess+rwc +define+RX_SETTING=$(RX_SETTING)
 
 .PHONY: sim clean
 

@@ -280,7 +280,7 @@ class Emulation:
                                  kind='int'))
         pack.add(VerilogConstant(name='FILTER_BIAS_VALS',
                                  value=[filter_pwl_table.bias_int for filter_pwl_table in self.filter_pwl_tables],
-                                 kind='int'))
+                                 kind='longint'))
         pack.add(VerilogConstant(name='FILTER_SLOPE_WIDTHS',
                                  value=[filter_pwl_table.slope_fmt.n for filter_pwl_table in self.filter_pwl_tables],
                                  kind='int'))
