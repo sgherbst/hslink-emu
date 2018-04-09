@@ -86,7 +86,9 @@ class Emulation:
                  f_nom = 8e9,                   # nominal TX frequency
                  jitter_pkpk = 10e-12,          # peak-to-peak jitter of TX
                  t_res = 1e-14,                 # smallest time resolution represented
-                 t_trunc = 10e-9                # time at which step response is truncated
+                 t_trunc = 1e-9,               # time at which step response is truncated
+                 rom_dir = 'roms',              # where ROMS are stored
+                 rom_ext = 'mem'                # file extension of ROMs
     ):
         # save settings
         self.err = err
@@ -95,6 +97,11 @@ class Emulation:
         self.jitter_pkpk = jitter_pkpk
         self.t_res = t_res
         self.t_trunc = t_trunc
+
+        # store ROM directory location  # create rom directory if necessary
+        this_file = os.path.abspath(__file__)
+        self.rom_dir_path = os.path.abspath(os.path.join(os.path.dirname(this_file), rom_dir))
+        self.rom_ext = rom_ext
 
         # Get the step responses and record the minimum steady-state value,
         # which sets precision requirements throughout the design
@@ -126,6 +133,7 @@ class Emulation:
         self.set_filter_widths()
 
         # create verilog packages
+        self.tx_ffe_rom_file = os.path.join(self.rom_dir_path, 'tx_ffe_rom') + '.' + self.rom_ext
         self.create_packages()
 
     def set_time_format(self):
@@ -140,22 +148,18 @@ class Emulation:
         self.tx_ffe = TxFFE()
 
         # compute input point format
-        self.R_in = max(sum(abs(tap) for tap in taps) for taps in self.tx_ffe.taps_array)
+        self.R_in = max(sum(abs(elem) for elem in setting) for setting in self.tx_ffe.settings)
         self.in_point_fmt = PointFormat.make(self.err.in_*self.R_in)
 
         # compute tap representations
-        format_tap_pair = lambda tap_pair: self.in_point_fmt.to_fixed(tap_pair, signed=True)
-        format_setting = lambda setting: list(map(format_tap_pair, setting))
-        setting_fmts = list(map(format_setting, self.tx_ffe.settings))
+        in_fmts = [Fixed(point_fmt=self.in_point_fmt,
+                         width_fmt=WidthFormat.make(self.in_point_fmt.intval(setting), signed=True))
+                   for setting in self.tx_ffe.settings]
 
         # define the input format
-        self.in_fmt = Fixed.cover(sum(setting_fmt) for setting_fmt in setting_fmts)
-
-        # define the tap format
-        self.tap_fmt = Fixed.cover(Fixed.cover(setting_fmt) for setting_fmt in setting_fmts)
+        self.in_fmt = Fixed.cover(in_fmts)
 
         # log the results
-        logging.debug('TX tap range: {} to {}'.format(self.tap_fmt.min_float, self.tap_fmt.max_float))
         logging.debug('Input range: {} to {}'.format(self.in_fmt.min_float, self.in_fmt.max_float))
 
     def set_filter_points(self):
@@ -203,20 +207,16 @@ class Emulation:
         self.dt_fmt = Fixed(point_fmt=self.time_fmt.point_fmt,
                             width_fmt=WidthFormat.make([0, dt_max_int], signed=False))
 
-    def create_filter_pwl_tables(self, rom_dir='roms'):
-        # create rom directory if necessary
-        this_file = os.path.abspath(__file__)
-        self.rom_dir_path = os.path.abspath(os.path.join(os.path.dirname(this_file), rom_dir))
-        pathlib.Path(self.rom_dir_path).mkdir(parents=True, exist_ok=True)
-
+    def create_filter_pwl_tables(self, filter_segment_prefix='filter_segment_rom',
+                                 filter_bias_prefix='filter_bias_rom'):
         self.filter_segment_rom_paths = []
         self.filter_bias_rom_paths = []
         self.filter_pwl_tables = []
         for k in range(self.num_ui):
             logging.debug('Building PWL #{}'.format(k))
             filter_pwl_table = self.create_filter_pwl_table(k)
-            filter_segment_rom_file = 'filter_segment_rom_'+str(k)+'.mem'
-            filter_bias_rom_file = 'filter_bias_rom_' + str(k) + '.mem'
+            filter_segment_rom_file = '{:s}_{:d}.{:s}'.format(filter_segment_prefix, k, self.rom_ext)
+            filter_bias_rom_file = '{:s}_{:d}.{:s}'.format(filter_bias_prefix, k, self.rom_ext)
             self.filter_segment_rom_paths.append(os.path.join(self.rom_dir_path, filter_segment_rom_file))
             self.filter_bias_rom_paths.append(os.path.join(self.rom_dir_path, filter_bias_rom_file))
             self.filter_pwl_tables.append(filter_pwl_table)
@@ -259,14 +259,17 @@ class Emulation:
         else:
             raise Exception('Failed to find a suitable PWL representation.')
 
-    def write_filter_rom_files(self, dir='roms'):
+    def write_filter_rom_files(self):
         for (filter_pwl_table,
              filter_segment_rom_path,
              filter_bias_rom_path) in zip(self.filter_pwl_tables,
                                           self.filter_segment_rom_paths,
                                           self.filter_bias_rom_paths):
-            filter_pwl_table.write_segment_table(os.path.join(dir, filter_segment_rom_path))
-            filter_pwl_table.write_bias_table(os.path.join(dir, filter_bias_rom_path))
+            filter_pwl_table.write_segment_table(filter_segment_rom_path)
+            filter_pwl_table.write_bias_table(filter_bias_rom_path)
+
+    def write_tx_ffe_rom_file(self):
+        self.tx_ffe.write_table(file_name=self.tx_ffe_rom_file, fixed_format=self.in_fmt)
 
     def create_filter_package(self, name='filter_package'):
         pack = VerilogPackage(name=name)
@@ -339,17 +342,9 @@ class Emulation:
     def create_tx_package(self, name='tx_package'):
         pack = VerilogPackage(name=name)
 
-        pack.add_fixed_format(self.tap_fmt, 'TAP')
         pack.add(VerilogConstant(name='N_SETTINGS', value=self.tx_ffe.n_settings, kind='int'))
         pack.add(VerilogConstant(name='N_TAPS', value=self.tx_ffe.n_taps, kind='int'))
-
-        # compute tx taps as integers
-        tx_tap_intvals_plus = [[self.tap_fmt.intval(tap) for tap in taps] for taps in self.tx_ffe.taps_array]
-        tx_tap_intvals_minus = [[self.tap_fmt.intval(-tap) for tap in taps] for taps in self.tx_ffe.taps_array]
-
-        # add them to the package
-        pack.add(VerilogConstant(name='TX_TAPS_PLUS', value=tx_tap_intvals_plus, kind='longint'))
-        pack.add(VerilogConstant(name='TX_TAPS_MINUS', value=tx_tap_intvals_minus, kind='longint'))
+        pack.add(VerilogConstant(name='TX_FFE_ROM_FILE', value=self.tx_ffe_rom_file, kind='string'))
 
         self.tx_package = pack
 
@@ -366,7 +361,11 @@ class Emulation:
         self.tx_package.write_to_file()
 
     def write_rom_files(self):
+        # create ROM directory if necessary
+        pathlib.Path(self.rom_dir_path).mkdir(parents=True, exist_ok=True)
+
         self.write_filter_rom_files()
+        self.write_tx_ffe_rom_file()
 
 class PwlTable:
     def __init__(self, pwls, high_bits_fmt, low_bits_fmt, addr_offset_int, offset_point_fmt, slope_point_fmt):
