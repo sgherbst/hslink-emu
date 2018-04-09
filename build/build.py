@@ -209,13 +209,16 @@ class Emulation:
         self.rom_dir_path = os.path.abspath(os.path.join(os.path.dirname(this_file), rom_dir))
         pathlib.Path(self.rom_dir_path).mkdir(parents=True, exist_ok=True)
 
-        self.filter_rom_paths = []
+        self.filter_segment_rom_paths = []
+        self.filter_bias_rom_paths = []
         self.filter_pwl_tables = []
         for k in range(self.num_ui):
             logging.debug('Building PWL #{}'.format(k))
             filter_pwl_table = self.create_filter_pwl_table(k)
-            filter_rom_file = 'filter_rom_'+str(k)+'.mem'
-            self.filter_rom_paths.append(os.path.join(self.rom_dir_path, filter_rom_file))
+            filter_segment_rom_file = 'filter_segment_rom_'+str(k)+'.mem'
+            filter_bias_rom_file = 'filter_bias_rom_' + str(k) + '.mem'
+            self.filter_segment_rom_paths.append(os.path.join(self.rom_dir_path, filter_segment_rom_file))
+            self.filter_bias_rom_paths.append(os.path.join(self.rom_dir_path, filter_bias_rom_file))
             self.filter_pwl_tables.append(filter_pwl_table)
 
     def create_filter_pwl_table(self, k, addr_bits_max=18):
@@ -257,8 +260,13 @@ class Emulation:
             raise Exception('Failed to find a suitable PWL representation.')
 
     def write_filter_rom_files(self, dir='roms'):
-        for filter_rom_path, filter_pwl_table in zip(self.filter_rom_paths, self.filter_pwl_tables):
-            filter_pwl_table.write_table(os.path.join(dir, filter_rom_path))
+        for (filter_pwl_table,
+             filter_segment_rom_path,
+             filter_bias_rom_path) in zip(self.filter_pwl_tables,
+                                          self.filter_segment_rom_paths,
+                                          self.filter_bias_rom_paths):
+            filter_pwl_table.write_segment_table(os.path.join(dir, filter_segment_rom_path))
+            filter_pwl_table.write_bias_table(os.path.join(dir, filter_bias_rom_path))
 
     def create_filter_package(self, name='filter_package'):
         pack = VerilogPackage(name=name)
@@ -281,7 +289,8 @@ class Emulation:
                                  kind='int'))
 
         # PWL-specific definitions
-        pack.add(VerilogConstant(name='FILTER_ROM_PATHS', value=self.filter_rom_paths, kind='string'))
+        pack.add(VerilogConstant(name='FILTER_SEGMENT_ROM_PATHS', value=self.filter_segment_rom_paths, kind='string'))
+        pack.add(VerilogConstant(name='FILTER_BIAS_ROM_PATHS', value=self.filter_bias_rom_paths, kind='string'))
         pack.add(VerilogConstant(name='FILTER_ADDR_WIDTHS',
                                  value=[filter_pwl_table.high_bits_fmt.n for filter_pwl_table in self.filter_pwl_tables],
                                  kind='int'))
@@ -294,8 +303,8 @@ class Emulation:
         pack.add(VerilogConstant(name='FILTER_OFFSET_WIDTHS',
                                  value=[filter_pwl_table.offset_fmt.n for filter_pwl_table in self.filter_pwl_tables],
                                  kind='int'))
-        pack.add(VerilogConstant(name='FILTER_BIAS_VALS',
-                                 value=[filter_pwl_table.bias_ints for filter_pwl_table in self.filter_pwl_tables],
+        pack.add(VerilogConstant(name='FILTER_BIAS_WIDTHS',
+                                 value=[filter_pwl_table.bias_fmt.n for filter_pwl_table in self.filter_pwl_tables],
                                  kind='longint'))
         pack.add(VerilogConstant(name='FILTER_SLOPE_WIDTHS',
                                  value=[filter_pwl_table.slope_fmt.n for filter_pwl_table in self.filter_pwl_tables],
@@ -385,6 +394,14 @@ class PwlTable:
     def n_settings(self):
         return len(self.pwls)
 
+    @property
+    def setting_bits(self):
+        return int(ceil(log2(self.n_settings)))
+
+    @property
+    def setting_padding(self):
+        return ((1<<self.setting_bits)-self.n_settings)
+
     def set_rom_fmt(self):
         # determine the bias
         bias_floats = [(min(pwl.offsets)+max(pwl.offsets))/2 for pwl in self.pwls]
@@ -426,20 +443,31 @@ class PwlTable:
 
         self.out_fmt = Fixed.cover(out_fmts)
 
-    def write_table(self, fname):
+    def write_segment_table(self, fname):
         with open(fname, 'w') as f:
-            n_settings_pow_2 = 1<<int(ceil(log2(self.n_settings)))
-            for setting in range(n_settings_pow_2):
-                if setting < self.n_settings:
-                    offset_ints = self.offset_ints[setting]
-                    slope_ints = self.slope_ints[setting]
-                else:
-                    offset_ints = [0]*self.n_segments
-                    slope_ints = [0]*self.n_segments
-
-                for offset_str, slope_str in zip(self.offset_fmt.width_fmt.bin_str(offset_ints),
-                                                 self.slope_fmt.width_fmt.bin_str(slope_ints)):
+            # write the segment tables for each setting one after another
+            for offset_setting, slope_setting in zip(self.offset_ints, self.slope_ints):
+                offset_strs = self.offset_fmt.width_fmt.bin_str(offset_setting)
+                slope_strs = self.slope_fmt.width_fmt.bin_str(slope_setting)
+                for offset_str, slope_str in zip(offset_strs, slope_strs):
                     f.write(offset_str+slope_str+'\n')
+
+            # pad the end with zeros as necessary
+            zero_str = '0'*(self.offset_fmt.n+self.slope_fmt.n)
+            for i in range(self.setting_padding):
+                for j in range(self.n_segments):
+                    f.write(zero_str+'\n')
+
+    def write_bias_table(self, fname):
+        with open(fname, 'w') as f:
+            # write the bias values into a table
+            for bias_str in self.bias_fmt.width_fmt.bin_str(self.bias_ints):
+                f.write(bias_str + '\n')
+
+            # pad the end with zeros as necessary
+            zero_str = '0'*self.bias_fmt.n
+            for i in range(self.setting_padding):
+                f.write(zero_str+'\n')
 
     @property
     def table_size_bits(self):
