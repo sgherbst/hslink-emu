@@ -51,7 +51,9 @@ module filter (
             assign pwl_in[k] = time_next - time_hist[k];
             
             // PWL instantiation
-            pwl #(.rom_name(FILTER_ROM_PATHS[k]),
+            pwl #(.segment_rom_name(FILTER_SEGMENT_ROM_PATHS[k]),
+                  .bias_rom_name(FILTER_BIAS_ROM_PATHS[k]),
+                  .bias_width(FILTER_BIAS_WIDTHS[k]),
                   .n_settings(NUM_RX_SETTINGS),
                   .setting_width(RX_SETTING_WIDTH),
                   .in_width(DT_WIDTH),
@@ -60,7 +62,6 @@ module filter (
                   .addr_offset(FILTER_ADDR_OFFSETS[k]),
                   .segment_width(FILTER_SEGMENT_WIDTHS[k]),
                   .offset_width(FILTER_OFFSET_WIDTHS[k]),
-                  .k(k),
                   .slope_width(FILTER_SLOPE_WIDTHS[k]),
                   .slope_point(FILTER_SLOPE_POINTS[k]),
                   .out_width(FILTER_STEP_WIDTH),

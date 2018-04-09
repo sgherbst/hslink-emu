@@ -3,7 +3,9 @@
 import filter_package::*;
 
 module pwl #(
-    parameter rom_name = "rom.mem",
+    parameter segment_rom_name = "rom.mem",
+    parameter bias_rom_name = "rom.mem",
+    parameter bias_width = 1,
     parameter n_settings = 1,
     parameter setting_width = 1,   
     parameter in_width = 1,
@@ -15,8 +17,7 @@ module pwl #(
     parameter slope_width = 1,
     parameter slope_point = 1,
     parameter out_width = 1,
-    parameter out_point = 1,
-    parameter k = 0
+    parameter out_point = 1
 )(
     input [in_width-1:0] in,
     output signed [out_width-1:0] out,
@@ -24,21 +25,27 @@ module pwl #(
     input [setting_width-1:0] setting
 );
     // local parameters defined for convenience
-    localparam rom_addr_width = setting_width+addr_width;
-    localparam rom_data_width = offset_width+slope_width;
+    localparam segment_rom_addr_width = setting_width+addr_width;
+    localparam segment_rom_data_width = offset_width+slope_width;
     localparam in_diff_width = segment_width+addr_width;
     localparam prod_width = segment_width + slope_width + 1; // extra bit added to account for making segment signed
     
-    // instantiate the rom
-    wire [rom_addr_width-1:0] rom_addr;
-    wire [rom_data_width-1:0] rom_data;
-    myrom #(.addr_bits(rom_addr_width),
-            .data_bits(rom_data_width),
-            .filename(rom_name)) myrom_i(.addr(rom_addr), .dout(rom_data), .clk(clk));
+    // instantiate the segment rom
+    wire [segment_rom_addr_width-1:0] segment_rom_addr;
+    wire [segment_rom_data_width-1:0] segment_rom_data;
+    myrom #(.addr_bits(segment_rom_addr_width),
+            .data_bits(segment_rom_data_width),
+            .filename(segment_rom_name)) segment_rom_i(.addr(segment_rom_addr), .dout(segment_rom_data), .clk(clk));
+
+    // instantiate the bias rom
+    wire [bias_width-1:0] bias_rom_data;
+    myrom #(.addr_bits(setting_width),
+            .data_bits(bias_width),
+            .filename(bias_rom_name)) bias_rom_i(.addr(setting), .dout(bias_rom_data), .clk(clk));
 
     // calculate rom addr
     wire [in_diff_width-1:0] in_diff = in - addr_offset;
-    assign rom_addr = {setting, in_diff[in_diff_width-1:segment_width]};
+    assign segment_rom_addr = {setting, in_diff[in_diff_width-1:segment_width]};
 
     // calculate length along segment
     // it is stored with a latency of one clock cycle
@@ -48,9 +55,10 @@ module pwl #(
         segment <= in_diff[segment_width-1:0];
     end
 
-    // interpretation of memory contents as signed offset and slope
-    wire signed [offset_width-1:0] offset = $signed(rom_data[offset_width+slope_width-1:slope_width]);
-    wire signed [slope_width-1:0] slope = $signed(rom_data[slope_width-1:0]);
+    // interpretation of memory contents as signed offset, slope, and bias
+    wire signed [offset_width-1:0] offset = $signed(segment_rom_data[offset_width+slope_width-1:slope_width]);
+    wire signed [slope_width-1:0] slope = $signed(segment_rom_data[slope_width-1:0]);
+    wire signed [bias_width-1:0] bias = $signed(bias_rom_data);
 
     // compute linear correction
     wire signed [prod_width-1:0] prod;
@@ -64,5 +72,5 @@ module pwl #(
                                              .c(prod));
   
     // assign output as sum of linear correction, offset from ROM, and a bias value
-    assign out = offset + prod + FILTER_BIAS_VALS[k][setting];
+    assign out = offset + prod + bias;
 endmodule
