@@ -147,8 +147,11 @@ class Emulation:
     def set_in_format(self):
         self.tx_ffe = TxFFE()
 
+        # Determine range of inputs
+        self.R_in = max(max(abs(elem) for elem in setting) for setting in self.tx_ffe.settings)
+        logging.debug('R_in = {}'.format(self.R_in))
+
         # compute input point format
-        self.R_in = max(sum(abs(elem) for elem in setting) for setting in self.tx_ffe.settings)
         self.in_point_fmt = PointFormat.make(self.err.in_*self.R_in)
 
         # compute tap representations
