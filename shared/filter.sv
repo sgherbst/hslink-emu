@@ -12,13 +12,10 @@ module filter (
     input TIME_FORMAT time_next,
     input [RX_SETTING_WIDTH-1:0] rx_setting
 );
-    // verilog idiosyncracy, needed to initialize arrays to zero
-    localparam signed [FILTER_IN_WIDTH-1:0] value_hist_zero = 0;
-    localparam signed [FILTER_IN_WIDTH-1:0] time_hist_zero = 0;
-
-    // generate input history
-    FILTER_IN_FORMAT value_hist [NUM_UI] = '{(NUM_UI){value_hist_zero}};
-    DT_FORMAT time_hist [NUM_UI] = '{(NUM_UI){time_hist_zero}};
+    // input history
+    FILTER_IN_FORMAT value_hist [NUM_UI];
+    FILTER_IN_FORMAT value_hist_reg [1:NUM_UI-1];
+    DT_FORMAT time_hist [NUM_UI];
     
     reg time_eq_in_d = 1'b0;
     always @(posedge clk_sys) begin
@@ -29,10 +26,15 @@ module filter (
     generate
         for (k=0; k<NUM_UI; k=k+1) begin : gen_input_hist
             if (k==0) begin
+                // value
                 assign value_hist[k] = in;
+                // time
                 mydff #(.N(DT_WIDTH)) time_dff_0(.in(time_next[DT_WIDTH-1:0]), .out(time_hist[0]), .cke(time_eq_in), .clk(clk_sys));
             end else begin
-                mydff #(.N(FILTER_IN_WIDTH)) value_dff_k(.in(value_hist[k-1]), .out(value_hist[k]), .cke(time_eq_in_d), .clk(clk_sys));
+                // value
+                assign value_hist[k] = value_hist_reg[k];
+                mydff #(.N(FILTER_IN_WIDTH)) value_dff_k(.in(value_hist[k-1]), .out(value_hist_reg[k]), .cke(time_eq_in_d), .clk(clk_sys));
+                // time
                 mydff #(.N(DT_WIDTH)) time_dff_k(.in(time_hist[k-1]), .out(time_hist[k]), .cke(time_eq_in), .clk(clk_sys));
             end
         end

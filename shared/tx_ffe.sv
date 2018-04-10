@@ -2,6 +2,7 @@
 
 import filter_package::*;
 import tx_package::*;
+import signal_package::*;
 
 module tx_ffe (
     input in,

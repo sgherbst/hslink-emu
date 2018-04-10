@@ -6,12 +6,11 @@ module clock #(
     parameter integer N = 1,
     parameter integer TIME_INC_BITS = 1
 )(
-    input wire clk_orig,
     input wire clk_sys,
     input TIME_FORMAT time_next,
     input wire [TIME_INC_BITS-1:0] inc,
     output TIME_FORMAT time_clock=0,
-    output wire [N-1:0] clk_out,
+    output reg [N-1:0] cke_out = 0,
     output wire time_eq
 );
     // clock gating signal
@@ -50,16 +49,7 @@ module clock #(
     endgenerate
 
     // delay clock enable by one cycle
-    reg [N-1:0] clk_en_d = 0;
     always @(posedge clk_sys) begin
-        clk_en_d <= clk_en;
+        cke_out <= clk_en;
     end
-
-    // clock gate instantiation
-    genvar k;
-    generate
-        for (k=0; k<N; k=k+1) begin : clk_gate_gen
-            clkgate gate_i(.en(clk_en_d[k]), .clk(clk_orig), .gated(clk_out[k]));
-        end
-    endgenerate
 endmodule
