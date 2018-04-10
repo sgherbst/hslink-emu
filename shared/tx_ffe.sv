@@ -34,16 +34,6 @@ module tx_ffe (
     // set the ROM address
     assign rom_addr = {tx_setting, in_hist, in};
 
-    // POR mask
-    reg valid_mask;
-    always @(posedge clk) begin
-        if (rst == 1'b1) begin
-            valid_mask <= 1'b0;
-        end else begin
-            valid_mask <= 1'b1;
-        end
-    end
-
     // write the output
-    assign out = $signed(rom_data & {FILTER_IN_WIDTH{valid_mask}});
+    assign out = $signed(rom_data & {FILTER_IN_WIDTH{~rst}});
 endmodule
