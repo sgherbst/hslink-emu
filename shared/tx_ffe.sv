@@ -8,6 +8,7 @@ import signal_package::*;
 module tx_ffe (
     input in,
     input clk,
+    input rst,
     output FILTER_IN_FORMAT out,
     input [TX_SETTING_WIDTH-1:0] tx_setting
 );
@@ -21,20 +22,28 @@ module tx_ffe (
             .filename({ROM_DIR_PATH, TX_FFE_ROM_NAME})) myrom_i(.addr(rom_addr), .dout(rom_data), .clk(clk));
 
     // store the input history
-    reg [N_TAPS-2:0] in_hist = 0;
+    reg [N_TAPS-2:0] in_hist;
     always @(posedge clk) begin
-        in_hist <= (in_hist << 1) | in;
+        if (rst == 1'b1) begin
+            in_hist <= 0;
+        end else begin
+            in_hist <= (in_hist << 1) | in;
+        end
     end
 
     // set the ROM address
     assign rom_addr = {tx_setting, in_hist, in};
 
     // POR mask
-    reg mask = 1'b0;
+    reg valid_mask;
     always @(posedge clk) begin
-        mask <= 1'b1;
+        if (rst == 1'b1) begin
+            valid_mask <= 1'b0;
+        end else begin
+            valid_mask <= 1'b1;
+        end
     end
 
     // write the output
-    assign out = $signed(rom_data & {FILTER_IN_WIDTH{mask}});
+    assign out = $signed(rom_data & {FILTER_IN_WIDTH{valid_mask}});
 endmodule

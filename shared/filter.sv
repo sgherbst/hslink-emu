@@ -5,10 +5,11 @@ import time_package::*;
 import filter_package::*;
 
 module filter (
+    input clk,
+    input rst,
     input FILTER_IN_FORMAT in,
     input wire time_eq_in,
     output FILTER_OUT_FORMAT out,
-    input wire clk_sys,
     input TIME_FORMAT time_next,
     input [RX_SETTING_WIDTH-1:0] rx_setting
 );
@@ -17,11 +18,16 @@ module filter (
     FILTER_IN_FORMAT value_hist_reg [1:NUM_UI-1];
     DT_FORMAT time_hist [NUM_UI];
     
-    reg time_eq_in_d = 1'b0;
-    always @(posedge clk_sys) begin
-        time_eq_in_d <= time_eq_in;
+    // generate delayed version of clock enable
+    reg time_eq_in_d;
+    always @(posedge clk) begin
+        if (rst == 1'b1) begin
+            time_eq_in_d <= 0;
+        end else begin
+            time_eq_in_d <= time_eq_in;
+        end
     end
-
+    
     genvar k;
     generate
         for (k=0; k<NUM_UI; k=k+1) begin : gen_input_hist
@@ -29,13 +35,25 @@ module filter (
                 // value
                 assign value_hist[k] = in;
                 // time
-                mydff #(.N(DT_WIDTH)) time_dff_0(.in(time_next[DT_WIDTH-1:0]), .out(time_hist[0]), .cke(time_eq_in), .clk(clk_sys));
+                mydff #(.N(DT_WIDTH)) time_dff_0(.in(time_next[DT_WIDTH-1:0]),
+                                                 .out(time_hist[0]),
+                                                 .cke(time_eq_in),
+                                                 .clk(clk),
+                                                 .rst(rst));
             end else begin
                 // value
                 assign value_hist[k] = value_hist_reg[k];
-                mydff #(.N(FILTER_IN_WIDTH)) value_dff_k(.in(value_hist[k-1]), .out(value_hist_reg[k]), .cke(time_eq_in_d), .clk(clk_sys));
+                mydff #(.N(FILTER_IN_WIDTH)) value_dff_k(.in(value_hist[k-1]),
+                                                         .out(value_hist_reg[k]),
+                                                         .cke(time_eq_in_d), 
+                                                         .clk(clk),
+                                                         .rst(rst));
                 // time
-                mydff #(.N(DT_WIDTH)) time_dff_k(.in(time_hist[k-1]), .out(time_hist[k]), .cke(time_eq_in), .clk(clk_sys));
+                mydff #(.N(DT_WIDTH)) time_dff_k(.in(time_hist[k-1]),
+                                                 .out(time_hist[k]),
+                                                 .cke(time_eq_in),
+                                                 .clk(clk),
+                                                 .rst(rst));
             end
         end
     endgenerate
@@ -68,9 +86,10 @@ module filter (
                   .slope_point(FILTER_SLOPE_POINTS[k]),
                   .out_width(FILTER_STEP_WIDTH),
                   .out_point(FILTER_STEP_POINT)) pwl_k (.in(pwl_in[k]), 
-                                                        .clk(clk_sys),
                                                         .out(steps[k]),
-                                                        .setting(rx_setting));
+                                                        .setting(rx_setting),
+                                                        .clk(clk),
+                                                        .rst(rst));
 
             // Pulse responses
             if (k == 0) begin

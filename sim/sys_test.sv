@@ -29,12 +29,19 @@ module tb;
             #2.5;
         end
     end
+    
+    reg rst = 1'b1;
+    initial begin
+        #1000;
+        rst = 1'b0;
+    end
 
     dut dut_i(.SYSCLK_P(SYSCLK_P),    
               .SYSCLK_N(SYSCLK_N),
               .sim_done(sim_done),
               .tx_setting(tx_setting),
-              .rx_setting(rx_setting));
+              .rx_setting(rx_setting),
+              .rst(rst));
 
     always @(sim_done) begin
         if (sim_done == 1'b1) begin

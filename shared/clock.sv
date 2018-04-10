@@ -6,19 +6,22 @@ module clock #(
     parameter integer N = 1,
     parameter integer TIME_INC_BITS = 1
 )(
-    input wire clk_sys,
+    input wire clk,
+    input wire rst,
     input TIME_FORMAT time_next,
     input wire [TIME_INC_BITS-1:0] inc,
-    output TIME_FORMAT time_clock=0,
-    output reg [N-1:0] cke_out = 0,
+    output TIME_FORMAT time_clock,
+    output reg [N-1:0] cke_out,
     output wire time_eq
 );
     // clock gating signal
     assign time_eq = (time_next == time_clock) ? 1'b1 : 1'b0;
 
     // clock period progression logic
-    always @(posedge clk_sys) begin
-        if (time_eq == 1'b1) begin
+    always @(posedge clk) begin
+        if (rst == 1'b1) begin
+            time_clock <= 0;
+        end else if (time_eq == 1'b1) begin
             time_clock <= time_clock + inc;
         end else begin
             time_clock <= time_clock;
@@ -33,9 +36,11 @@ module clock #(
         if (N==1) begin : one_phase
             assign clk_en = time_eq;
         end else if (N==2) begin : two_phase
-            reg mask = 0;
-            always @(posedge clk_sys) begin
-                if (time_eq == 1'b1) begin
+            reg mask;
+            always @(posedge clk) begin
+                if (rst == 1'b1) begin
+                    mask <= 0;
+                end else if (time_eq == 1'b1) begin
                     mask <= ~mask;
                 end else begin
                     mask <= mask;
@@ -49,7 +54,11 @@ module clock #(
     endgenerate
 
     // delay clock enable by one cycle
-    always @(posedge clk_sys) begin
-        cke_out <= clk_en;
+    always @(posedge clk) begin
+        if (rst == 1'b1) begin
+            cke_out <= 0;
+        end else begin
+            cke_out <= clk_en;
+        end 
     end
 endmodule

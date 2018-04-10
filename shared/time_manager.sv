@@ -8,8 +8,9 @@ module time_manager #(
 )(
     input TIME_FORMAT time_in [N],
     output TIME_FORMAT time_next,
-    output TIME_FORMAT time_curr=0,
-    input wire clk_sys
+    output TIME_FORMAT time_curr,
+    input wire clk,
+    input wire rst
 );
     generate
         if (N==1) begin
@@ -21,7 +22,11 @@ module time_manager #(
         end
     endgenerate
 
-    always @(posedge clk_sys) begin
-        time_curr <= time_next;
+    always @(posedge clk) begin
+        if (rst == 1'b1) begin 
+            time_curr <= 0;
+        end else begin
+            time_curr <= time_next;
+        end
     end
 endmodule

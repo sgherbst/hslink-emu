@@ -9,14 +9,10 @@ module adc #(
     parameter sig_point = 1
 )(
     input wire clk,
+    input wire rst,
     input TIME_FORMAT time_curr,
     input wire signed [sig_bits-1:0] sig
 );
     (* mark_debug = "true" *) TIME_FORMAT time_samp;
     (* mark_debug = "true" *) reg [sig_bits-1:0] sig_samp;
-
-    always @(posedge clk) begin
-        time_samp <= time_curr;
-        sig_samp <= sig;
-    end
 endmodule

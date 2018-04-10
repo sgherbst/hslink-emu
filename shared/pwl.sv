@@ -22,8 +22,9 @@ module pwl #(
 )(
     input [in_width-1:0] in,
     output signed [out_width-1:0] out,
+    input [setting_width-1:0] setting,
     input clk,
-    input [setting_width-1:0] setting
+    input rst
 );
     // local parameters defined for convenience
     localparam segment_rom_addr_width = setting_width+addr_width;
@@ -51,9 +52,13 @@ module pwl #(
     // calculate length along segment
     // it is stored with a latency of one clock cycle
     // to match the rom latency
-    reg [segment_width-1:0] segment = 1'b0;
+    reg [segment_width-1:0] segment;
     always @(posedge clk) begin
-        segment <= in_diff[segment_width-1:0];
+        if (rst == 1'b1) begin
+            segment <= 0;
+        end else begin
+            segment <= in_diff[segment_width-1:0];
+        end
     end
 
     // interpretation of memory contents as signed offset, slope, and bias

@@ -12,7 +12,9 @@ module clkgen(
     output wire clk_rx_n
 );
     wire locked;
-    clk_wiz_0 clk_wiz_0_i(.reset(1'b0),
+    
+    clk_wiz_0 clk_wiz_0_i(// I/O for MMCM
+                          .reset(1'b0),
                           .locked(locked),
                           
                           // input clock (differential)

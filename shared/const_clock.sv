@@ -6,7 +6,8 @@ module const_clock #(
     parameter integer N = 1,
     parameter longint INC = 1
 )(
-    input wire clk_sys,
+    input wire clk,
+    input wire rst,
     input TIME_FORMAT time_next,
     output TIME_FORMAT time_clock,
     output wire [N-1:0] cke_out,
@@ -19,5 +20,11 @@ module const_clock #(
     wire [TIME_INC_BITS-1:0] inc = INC;
 
     // instantiate the clock
-    clock #(.N(N), .TIME_INC_BITS(TIME_INC_BITS)) clock_i(.clk_sys(clk_sys), .time_next(time_next), .inc(inc), .time_clock(time_clock), .cke_out(cke_out), .time_eq(time_eq));
+    clock #(.N(N), .TIME_INC_BITS(TIME_INC_BITS)) clock_i(.clk(clk), 
+                                                          .rst(rst),
+                                                          .time_next(time_next),
+                                                          .inc(inc),
+                                                          .time_clock(time_clock),
+                                                          .cke_out(cke_out),
+                                                          .time_eq(time_eq));
 endmodule
