@@ -53,8 +53,8 @@ module filter (
             assign pwl_in[k] = time_next - time_hist[k];
             
             // PWL instantiation
-            pwl #(.segment_rom_name(FILTER_SEGMENT_ROM_PATHS[k]),
-                  .bias_rom_name(FILTER_BIAS_ROM_PATHS[k]),
+            pwl #(.segment_rom_name(FILTER_SEGMENT_ROM_NAMES[k]),
+                  .bias_rom_name(FILTER_BIAS_ROM_NAMES[k]),
                   .bias_width(FILTER_BIAS_WIDTHS[k]),
                   .n_settings(NUM_RX_SETTINGS),
                   .setting_width(RX_SETTING_WIDTH),

@@ -27,13 +27,25 @@ class VerilogFormatting:
             raise ValueError('Unsupported type.')
 
     @staticmethod
-    def get_array_dims(vals):
-        if isinstance(vals, (int, float, str)):
+    def get_array_dims(val_or_vals):
+        if isinstance(val_or_vals, (int, float, str)):
             return ''
-        elif isinstance(vals, collections.Iterable):
-            subdims = [VerilogFormatting.get_array_dims(val) for val in vals]
+        elif isinstance(val_or_vals, collections.Iterable):
+            subdims = [VerilogFormatting.get_array_dims(val) for val in val_or_vals]
             assert all(subdim==subdims[0] for subdim in subdims)
             return '[{}]'.format(len(subdims)) + subdims[0]
+        else:
+            raise ValueError('Unsupported type.')
+
+    @staticmethod
+    def get_str_size(val_or_vals, char_size=8, include_null=True):
+        if isinstance(val_or_vals, str):
+            str_len = len(val_or_vals)
+            if include_null:
+                str_len += 1
+            return str_len*char_size
+        elif isinstance(val_or_vals, collections.Iterable):
+            return max(VerilogFormatting.get_str_size(val, char_size=char_size) for val in val_or_vals)
         else:
             raise ValueError('Unsupported type.')
 
@@ -47,8 +59,18 @@ class VerilogConstant:
         arr = []
 
         arr.append('parameter')
-        if self.kind is not None:
+        if self.kind is None:
+            pass
+        elif self.kind.lower() not in ['string']:
             arr.append(self.kind)
+        elif isinstance(self.value, str):
+            pass
+        elif isinstance(self.value, collections.Iterable):
+            max_str_size = VerilogFormatting.get_str_size(self.value)
+            arr.append('[{}:{}]'.format(max_str_size-1, 0))
+        else:
+            raise ValueError("Seems that 'kind' doesn't match 'value'.")
+
         arr.append(self.name)
 
         # add array dimensions if appropriate
@@ -84,9 +106,12 @@ class VerilogTypedef:
         return ' '.join(arr)
 
 class VerilogPackage:
-    def __init__(self, name='globals'):
+    def __init__(self, name='globals', time_unit='1ns', time_res='1ps', use_timescale=True):
         self.name = name
         self.vars = {}
+        self.time_unit = time_unit
+        self.time_res = time_res
+        self.use_timescale = use_timescale
 
     def add(self, var):
         # make sure that
@@ -108,6 +133,11 @@ class VerilogPackage:
 
     def __str__(self):
         retval = ''
+
+        if self.use_timescale:
+            retval += '`timescale {}/{}\n'.format(self.time_unit, self.time_res)
+            retval += '\n'
+            
         retval += 'package ' + self.name + ';\n'
         retval += '\n'
         for var in self.vars.values():
@@ -129,6 +159,8 @@ def main():
     package = VerilogPackage()
     package.add(VerilogConstant(name='TOTAL', value=456, kind='int'))
     package.add(arr)
+    package.add(VerilogConstant(name='SINGLE_STRING', value='abc123', kind='string'))
+    package.add(VerilogConstant(name='STRING_ARRAY', value=['foo', 'bar', '12345678'], kind='string'))
     print(str(package))
 
 if __name__=='__main__':

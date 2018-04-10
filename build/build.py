@@ -133,7 +133,7 @@ class Emulation:
         self.set_filter_widths()
 
         # create verilog packages
-        self.tx_ffe_rom_file = os.path.join(self.rom_dir_path, 'tx_ffe_rom') + '.' + self.rom_ext
+        self.tx_ffe_rom_name = 'tx_ffe_rom' + '.' + self.rom_ext
         self.create_packages()
 
     def set_time_format(self):
@@ -212,16 +212,16 @@ class Emulation:
 
     def create_filter_pwl_tables(self, filter_segment_prefix='filter_segment_rom',
                                  filter_bias_prefix='filter_bias_rom'):
-        self.filter_segment_rom_paths = []
-        self.filter_bias_rom_paths = []
+        self.filter_segment_rom_names = []
+        self.filter_bias_rom_names = []
         self.filter_pwl_tables = []
         for k in range(self.num_ui):
             logging.debug('Building PWL #{}'.format(k))
             filter_pwl_table = self.create_filter_pwl_table(k)
-            filter_segment_rom_file = '{:s}_{:d}.{:s}'.format(filter_segment_prefix, k, self.rom_ext)
-            filter_bias_rom_file = '{:s}_{:d}.{:s}'.format(filter_bias_prefix, k, self.rom_ext)
-            self.filter_segment_rom_paths.append(os.path.join(self.rom_dir_path, filter_segment_rom_file))
-            self.filter_bias_rom_paths.append(os.path.join(self.rom_dir_path, filter_bias_rom_file))
+            filter_segment_rom_name = '{:s}_{:d}.{:s}'.format(filter_segment_prefix, k, self.rom_ext)
+            filter_bias_rom_name = '{:s}_{:d}.{:s}'.format(filter_bias_prefix, k, self.rom_ext)
+            self.filter_segment_rom_names.append(filter_segment_rom_name)
+            self.filter_bias_rom_names.append(filter_bias_rom_name)
             self.filter_pwl_tables.append(filter_pwl_table)
 
     def create_filter_pwl_table(self, k, addr_bits_max=18):
@@ -264,15 +264,16 @@ class Emulation:
 
     def write_filter_rom_files(self):
         for (filter_pwl_table,
-             filter_segment_rom_path,
-             filter_bias_rom_path) in zip(self.filter_pwl_tables,
-                                          self.filter_segment_rom_paths,
-                                          self.filter_bias_rom_paths):
-            filter_pwl_table.write_segment_table(filter_segment_rom_path)
-            filter_pwl_table.write_bias_table(filter_bias_rom_path)
+             filter_segment_rom_name,
+             filter_bias_rom_name) in zip(self.filter_pwl_tables,
+                                          self.filter_segment_rom_names,
+                                          self.filter_bias_rom_names):
+            filter_pwl_table.write_segment_table(os.path.join(self.rom_dir_path, filter_segment_rom_name))
+            filter_pwl_table.write_bias_table(os.path.join(self.rom_dir_path, filter_bias_rom_name))
 
     def write_tx_ffe_rom_file(self):
-        self.tx_ffe.write_table(file_name=self.tx_ffe_rom_file, fixed_format=self.in_fmt)
+        self.tx_ffe.write_table(file_name=os.path.join(self.rom_dir_path, self.tx_ffe_rom_name),
+                                fixed_format=self.in_fmt)
 
     def create_filter_package(self, name='filter_package'):
         pack = VerilogPackage(name=name)
@@ -295,8 +296,8 @@ class Emulation:
                                  kind='int'))
 
         # PWL-specific definitions
-        pack.add(VerilogConstant(name='FILTER_SEGMENT_ROM_PATHS', value=self.filter_segment_rom_paths, kind='string'))
-        pack.add(VerilogConstant(name='FILTER_BIAS_ROM_PATHS', value=self.filter_bias_rom_paths, kind='string'))
+        pack.add(VerilogConstant(name='FILTER_SEGMENT_ROM_NAMES', value=self.filter_segment_rom_names, kind='string'))
+        pack.add(VerilogConstant(name='FILTER_BIAS_ROM_NAMES', value=self.filter_bias_rom_names, kind='string'))
         pack.add(VerilogConstant(name='FILTER_ADDR_WIDTHS',
                                  value=[filter_pwl_table.high_bits_fmt.n for filter_pwl_table in self.filter_pwl_tables],
                                  kind='int'))
@@ -348,7 +349,7 @@ class Emulation:
         pack.add(VerilogConstant(name='N_SETTINGS', value=self.tx_ffe.n_settings, kind='int'))
         pack.add(VerilogConstant(name='TX_SETTING_WIDTH', value=self.tx_ffe.setting_width, kind='int'))
         pack.add(VerilogConstant(name='N_TAPS', value=self.tx_ffe.n_taps, kind='int'))
-        pack.add(VerilogConstant(name='TX_FFE_ROM_FILE', value=self.tx_ffe_rom_file, kind='string'))
+        pack.add(VerilogConstant(name='TX_FFE_ROM_NAME', value=self.tx_ffe_rom_name, kind='string'))
 
         self.tx_package = pack
 
