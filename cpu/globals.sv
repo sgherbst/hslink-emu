@@ -2,6 +2,6 @@
 
 package globals;
 
-    parameter ROM_DIR_PATH = "//Mac/Home/Desktop/msemu/build/roms/";
+    parameter ROM_DIR_PATH = "/horowitz/users/sherbst/msemu/build/roms/";
 
 endpackage // globals

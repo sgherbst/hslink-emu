@@ -12,7 +12,7 @@ BUILD_DIR := ../build/
 SHARED_DIR := ../shared/
 CPU_DIR := ../cpu/
 
-PACKAGES := $(BUILD_DIR)/time_package.sv $(BUILD_DIR)/signal_package.sv $(BUILD_DIR)/filter_package.sv $(BUILD_DIR)/tx_package.sv
+PACKAGES := $(BUILD_DIR)/time_package.sv $(BUILD_DIR)/signal_package.sv $(BUILD_DIR)/filter_package.sv $(BUILD_DIR)/tx_package.sv $(CPU_DIR)/globals.sv
 NCVERILOG := ncverilog
 LIBS := -y $(SHARED_DIR) -y $(CPU_DIR)
 INCS := 
