@@ -3,6 +3,7 @@
 import time_package::*;
 import signal_package::*;
 import filter_package::*;
+import tx_package::*;
 
 module dut(
     input wire SYSCLK_P,
@@ -31,7 +32,8 @@ module dut(
     prbs prbs_i(.clk(clk_tx), .out(out_tx));
 
     // drive data into channel
-    tx_driver tx_drv_i(.in(out_tx), .out(sig_tx), .clk(clk_tx));
+    wire [TX_SETTING_WIDTH-1:0] tx_setting = `TX_SETTING;
+    tx_ffe tx_ffe_i(.in(out_tx), .out(sig_tx), .clk(clk_tx), .tx_setting(tx_setting));
 
     // filter data stream according to channel + CTLE dynamics
     wire [RX_SETTING_WIDTH-1:0] rx_setting = `RX_SETTING;

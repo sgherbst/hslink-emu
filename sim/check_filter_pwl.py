@@ -7,8 +7,9 @@ from scipy.stats import describe
 from math import floor
 import os.path
 import sys
+import argparse
 
-from msemu.ctle import get_ctle_imp
+from msemu.ctle import RxCTLE
 from msemu.rf import get_sample_s4p, s4p_to_impulse
 from msemu.pwl import Waveform
 
@@ -17,21 +18,10 @@ class SimResult:
         self.pwl = pwl
         self.ideal = ideal
 
-def get_combined_step():
-    # get the exact step response used in the build script
-    import_path = os.path.dirname(os.path.realpath(__file__))
-    import_path = os.path.join(import_path, os.path.pardir, 'build')
-    import_path = os.path.realpath(import_path)
-    print(import_path)
-    sys.path.append(import_path)
-    from build.build import get_combined_step
+def get_combined_step(rx_setting):
+    return RxCTLE().get_combined_step(rx_setting)
 
-    # compute the impulse response
-    step, _ = get_combined_step()
-
-    return step
-
-def eval():
+def eval(rx_setting):
     # read data
     data = genfromtxt('filter_pwl_emu.txt', delimiter=',')
     t_pwl = data[:, 0]
@@ -39,7 +29,7 @@ def eval():
     pwl = Waveform(t=t_pwl, v=v_pwl)
 
     # get ideal response
-    ideal = get_combined_step()
+    ideal = get_combined_step(rx_setting)
 
     # return waveforms
     return SimResult(
@@ -72,7 +62,11 @@ def plot(result):
     plt.show()
 
 def main():
-    result = eval()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--rx_setting', type=int, help='Setting of the RX CTLE.')
+    args = parser.parse_args()
+
+    result = eval(args.rx_setting)
 
     measure_error(result)
     plot(result)

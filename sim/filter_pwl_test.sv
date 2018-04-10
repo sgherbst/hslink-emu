@@ -2,7 +2,8 @@ import time_package::*;
 import filter_package::*;
 
 module top;
-    localparam k=NUM_UI-1;
+    localparam k=`FILTER_PWL_INDEX;
+
     localparam longint max_time = longint'(1)<<(longint'(FILTER_ADDR_WIDTHS[k])+longint'(FILTER_SEGMENT_WIDTHS[k]));
 
     integer f;
@@ -15,19 +16,27 @@ module top;
     DT_FORMAT t;
     FILTER_STEP_FORMAT v;
 
+    wire [RX_SETTING_WIDTH-1:0] rx_setting = `RX_SETTING;
+
     // PWL instantiation
-    pwl #(.rom_name(FILTER_ROM_PATHS[k]),
+    pwl #(.segment_rom_name(FILTER_SEGMENT_ROM_PATHS[k]),
+          .bias_rom_name(FILTER_BIAS_ROM_PATHS[k]),
+          .bias_width(FILTER_BIAS_WIDTHS[k]),
+          .n_settings(NUM_RX_SETTINGS),
+          .setting_width(RX_SETTING_WIDTH),
           .in_width(DT_WIDTH),
           .in_point(DT_POINT),
           .addr_width(FILTER_ADDR_WIDTHS[k]),
           .addr_offset(FILTER_ADDR_OFFSETS[k]),
           .segment_width(FILTER_SEGMENT_WIDTHS[k]),
           .offset_width(FILTER_OFFSET_WIDTHS[k]),
-          .bias_val(FILTER_BIAS_VALS[k]),
           .slope_width(FILTER_SLOPE_WIDTHS[k]),
           .slope_point(FILTER_SLOPE_POINTS[k]),
           .out_width(FILTER_STEP_WIDTH),
-          .out_point(FILTER_STEP_POINT)) pwl_k (.in(t), .clk(clk), .out(v));
+          .out_point(FILTER_STEP_POINT)) pwl_k (.in(t), 
+                                                .clk(clk),
+                                                .out(v),
+                                                .setting(rx_setting));
 
     initial begin
         for (longint i=0; i < max_time; i = i+1) begin

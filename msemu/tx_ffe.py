@@ -44,12 +44,12 @@ class TxFFE:
         return self._settings
 
     @property
-    def setting_bits(self):
+    def setting_width(self):
         return int(ceil(log2(self.n_settings)))
 
     @property
     def setting_padding(self):
-        return ((1 << self.setting_bits) - self.n_settings)
+        return ((1 << self.setting_width) - self.n_settings)
 
     def create_setting_array(self):
         self._settings = []

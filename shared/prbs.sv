@@ -8,8 +8,8 @@ module prbs #(
     output reg out
 );
     reg [15:0] state = init;
-    assign out = state[0];
-//    assign out = 1;
+//    assign out = state[0];
+    assign out = 1;
     
     always @(posedge clk) begin
         state <= {state[14:0], ~state[15]^state[14]^state[12]^state[3]};

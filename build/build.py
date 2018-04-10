@@ -86,7 +86,7 @@ class Emulation:
                  f_nom = 8e9,                   # nominal TX frequency
                  jitter_pkpk = 10e-12,          # peak-to-peak jitter of TX
                  t_res = 1e-14,                 # smallest time resolution represented
-                 t_trunc = 1e-9,               # time at which step response is truncated
+                 t_trunc = 10e-9,               # time at which step response is truncated
                  rom_dir = 'roms',              # where ROMS are stored
                  rom_ext = 'mem'                # file extension of ROMs
     ):
@@ -343,6 +343,7 @@ class Emulation:
         pack = VerilogPackage(name=name)
 
         pack.add(VerilogConstant(name='N_SETTINGS', value=self.tx_ffe.n_settings, kind='int'))
+        pack.add(VerilogConstant(name='TX_SETTING_WIDTH', value=self.tx_ffe.setting_width, kind='int'))
         pack.add(VerilogConstant(name='N_TAPS', value=self.tx_ffe.n_taps, kind='int'))
         pack.add(VerilogConstant(name='TX_FFE_ROM_FILE', value=self.tx_ffe_rom_file, kind='string'))
 
