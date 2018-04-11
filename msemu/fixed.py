@@ -201,6 +201,9 @@ class PointFormat:
             func = round
         return PointFormat.float2int(val_or_vals, point=self.point, func=func)
 
+    def floatval(self, val_or_vals):
+        return PointFormat.int2float(val_or_vals, point=self.point)
+
     def to_fixed(self, val_or_vals, signed):
         vals = listify(val_or_vals)
 
@@ -239,6 +242,18 @@ class PointFormat:
         else:
             assert len(intvals)==1
             return intvals[0]
+
+    @staticmethod
+    def int2float(val_or_vals, point):
+        vals = listify(val_or_vals)
+        res =  PointFormat.point2res(point)
+        floatvals = [val*res for val in vals]
+
+        if isinstance(val_or_vals, collections.Iterable):
+            return floatvals
+        else:
+            assert len(floatvals)==1
+            return floatvals[0]
 
     @staticmethod
     def make(res):
