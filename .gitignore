@@ -1,6 +1,9 @@
-*.egg-info
-*.s4p
 .DS_Store
 .idea
 __pycache__
+build
+data
+channel
+*.egg-info
+*.s4p
 *.pyc
