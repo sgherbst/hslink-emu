@@ -1,0 +1,11 @@
+.simvision
+INCA_libs
+*.out
+*.history
+*.log
+*.prof
+*.txt
+*.shm
+*.key
+*.bak
+*.svcf

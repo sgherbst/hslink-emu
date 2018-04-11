@@ -40,6 +40,10 @@ class Waveform:
         # get time spacing
         self.dt = Waveform.get_dt(self.t)
 
+    def trim(self, n):
+        assert n <= self.n
+        return Waveform(t=self.t[:n], v=self.v[:n])
+
     @staticmethod
     def get_dt(t):
         time_diffs = np.diff(t)

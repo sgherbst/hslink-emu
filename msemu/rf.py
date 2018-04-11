@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.interpolate import interp1d
+from scipy.signal import fftconvolve
 from scipy.fftpack import ifft
 import logging, sys
 from math import log2, ceil
@@ -8,6 +9,9 @@ import wget
 from scipy.integrate import cumtrapz
 
 from skrf import Network
+
+from msemu.cmd import mkdir_p
+from msemu.pwl import Waveform
 
 def s2sdd(s):
     """ Converts a 4-port single-ended S-parameter matrix
@@ -133,33 +137,78 @@ def s4p_to_impulse(s4p, dt, T, zs=50, zl=50):
 
     return t, y_imp
 
-def get_sample_s4p():
-    website = 'http://www.ece.tamu.edu/~spalermo/ecen689/'
-    data_file_name = 'peters_01_0605_B12_thru.s4p'
+def get_combined_imp(impa, impb):
+    # check that all dt values match
+    dt = impa.dt
+    assert np.isclose(impb.dt, dt)
+    
+    # compute combined impulse response
+    imp_v = fftconvolve(impa.v, impb.v)*dt
+    
+    # compute resulting step response
+    imp = Waveform(t=np.arange(len(imp_v))*dt,
+                   v=imp_v)
 
-    this_path = os.path.dirname(os.path.abspath(__file__))
-    data_dir = os.path.abspath(os.path.join(this_path, os.pardir, 'data'))
-    data_file_path = os.path.abspath(os.path.join(data_dir, data_file_name))
+    return imp
 
-    logging.debug('Checking if sample data is available.')
-    if not os.path.isfile(data_file_path):
-        logging.debug('Downloading sample data.')
-        url = website+data_file_name
-        wget.download(url, data_dir)
+def get_combined_step(impa, impb):
+    # get combined impulse
+    imp = get_combined_imp(impa, impb)
 
-    return data_file_path
+    # create step waveform
+    step = Waveform(t=imp.t,
+                    v=imp2step(imp=imp.v, dt=imp.dt))
 
+    return step
+
+class ChannelData:
+    def __init__(self,
+                 dir_name='../channel/',
+                 dt=0.1e-12,
+                 T=20e-9,
+                 file_name='peters_01_0605_B12_thru.s4p',
+                 website='http://www.ece.tamu.edu/~spalermo/ecen689/'): 
+
+        # save settings
+        self.dir_name = os.path.abspath(dir_name)
+        self.dt = dt
+        self.T = T
+        self.file_name = file_name
+        self.website = website
+
+        # get data if necessary
+        self.set_channel_file()
+
+        # compute impulse response
+        imp_t, imp_v = s4p_to_impulse(self.channel_file, self.dt, self.T)
+        self.imp = Waveform(t=imp_t, v=imp_v)
+
+        # compute step response
+        step_v = imp2step(self.imp.v, self.dt)
+        self.step = Waveform(t=self.imp.t, v=step_v)
+
+    def set_channel_file(self):
+        # determine path for channel data
+        self.channel_file = os.path.abspath(os.path.join(self.dir_name, self.file_name))
+
+        # download the data if necessary
+        logging.debug('Checking if channel data is available.')
+        if not os.path.isfile(self.channel_file):
+            logging.debug('Making directory for channel data if necessary.')
+            mkdir_p(self.dir_name)
+
+            logging.debug('Downloading channel data.')
+            url = website + self.file_name
+            wget.download(url, self.dir_name)
+    
 def main(dt=.1e-12, T=20e-9):
     import matplotlib.pyplot as plt
 
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
-    s4p = get_sample_s4p()
+    channel = ChannelData()
 
-    t, y_imp = s4p_to_impulse(s4p, dt, T)
-    y_step = imp2step(y_imp, dt)
-
-    plt.plot(t, y_step)
+    plt.plot(channel.step.t, channel.step.v)
     plt.show()
 
 if __name__ == '__main__':

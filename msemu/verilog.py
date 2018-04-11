@@ -1,4 +1,5 @@
 import collections
+import os.path
 
 class VerilogFormatting:
     @staticmethod
@@ -147,10 +148,9 @@ class VerilogPackage:
 
         return retval
 
-    def write_to_file(self, fname=None):
-        if fname is None:
-            fname = self.name + '.sv'
-        with open(fname, 'w') as f:
+    def write(self, dir_name):
+        file_name = os.path.join(dir_name, self.name + '.sv')
+        with open(file_name, 'w') as f:
             f.write(str(self))
 
 def main():

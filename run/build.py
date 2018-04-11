@@ -7,12 +7,13 @@ import os.path
 import pathlib
 import collections
 
-from msemu.rf import get_sample_s4p, s4p_to_impulse, imp2step
+from msemu.rf import ChannelData, get_combined_step
 from msemu.pwl import Waveform
 from msemu.fixed import Fixed, PointFormat, WidthFormat
 from msemu.ctle import RxCTLE
 from msemu.verilog import VerilogPackage, VerilogConstant
 from msemu.tx_ffe import TxFFE
+from msemu.cmd import get_parser, mkdir_p
 
 class ErrorBudget:
     # all errors are normalized to a particular value:
@@ -32,53 +33,6 @@ class ErrorBudget:
         self.prod = prod
         self.in_ = in_
 
-def main(plot_dt=1e-12):
-    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
-
-    err = ErrorBudget()
-    emu = Emulation(err=err)
-
-    emu.write_packages()
-    emu.write_rom_files()
-
-    # Plot bits used for PWL ROMs
-    bits_per_pulse = np.array([filter_pwl_table.table_size_bits for filter_pwl_table in emu.filter_pwl_tables])
-    plt.plot(bits_per_pulse)
-    plt.xlabel('Step Response #')
-    plt.ylabel('ROM Bits')
-    plt.savefig('rom_bits.pdf')
-    plt.clf()
-
-    # Plot number of segments for PWLs
-    seg_per_pulse = np.array([filter_pwl_table.n_segments for filter_pwl_table in emu.filter_pwl_tables])
-    plt.plot(seg_per_pulse)
-    plt.xlabel('Step Response #')
-    plt.ylabel('PWL Segments')
-    plt.savefig('pwl_segments.pdf')
-    plt.clf()
-
-    # Plot number of segments for PWLs
-    data_width_per_pulse = np.array([filter_pwl_table.offset_fmt.n+filter_pwl_table.slope_fmt.n for filter_pwl_table in emu.filter_pwl_tables])
-    plt.plot(data_width_per_pulse)
-    plt.xlabel('Step Response #')
-    plt.ylabel('Data Width')
-    plt.savefig('pwl_data_width.pdf')
-    plt.clf()
-
-    # Plot first step response
-    for k, step in enumerate(emu.steps):
-        plt.plot(step.t, step.v)
-
-        for filter_pwl_table in emu.filter_pwl_tables:
-            pwl = filter_pwl_table.pwls[k]
-            t_eval = pwl.domain(plot_dt)
-            plt.plot(t_eval, pwl.eval(t_eval))
-
-        plt.xlabel('Time')
-        plt.ylabel('Value')
-        plt.savefig('step_resp_{}.pdf'.format(k))
-        plt.clf()
-
 class Emulation:
     def __init__(self,
                  err,                           # error budget
@@ -87,10 +41,12 @@ class Emulation:
                  jitter_pkpk = 10e-12,          # peak-to-peak jitter of TX
                  t_res = 1e-14,                 # smallest time resolution represented
                  t_trunc = 10e-9,               # time at which step response is truncated
-                 rom_dir = 'roms',              # where ROMS are stored
+                 build_dir = '../build/',       # where packages are stored
+                 channel_dir = '../channel/',   # where channel data are stored
+                 rom_dir = '../build/roms',     # where ROM files are stored
                  rom_ext = 'mem'                # file extension of ROMs
     ):
-        # save settings
+        # save emulation settings
         self.err = err
         self.t_stop = t_stop
         self.f_nom = f_nom
@@ -98,18 +54,27 @@ class Emulation:
         self.t_res = t_res
         self.t_trunc = t_trunc
 
-        # store ROM directory location  # create rom directory if necessary
-        this_file = os.path.abspath(__file__)
-        self.rom_dir_path = os.path.abspath(os.path.join(os.path.dirname(this_file), rom_dir))
+        # store file output settings
+        self.build_dir = os.path.abspath(build_dir)
+        self.channel_dir = os.path.abspath(channel_dir)
+        self.rom_dir = os.path.abspath(rom_dir)
         self.rom_ext = rom_ext
+        
+        # create directories if necessary
+        mkdir_p(self.build_dir)
+        mkdir_p(self.channel_dir)
+        mkdir_p(self.rom_dir)
+
+        # Get the channel model
+        self.channel = ChannelData(dir_name=self.channel_dir)
 
         # Get the step responses and record the minimum steady-state value,
         # which sets precision requirements throughout the design
         self.rx_ctle = RxCTLE()
         self.steps = []
-        for setting in range(self.rx_ctle.n_settings):
-            logging.debug('Computing step response for dB={:0.1f}'.format(self.rx_ctle.db_vals[setting]))
-            step = self.rx_ctle.get_combined_step(setting)
+        for k, rx_imp in enumerate(self.rx_ctle.imps):
+            logging.debug('Computing step response for dB={:0.1f}'.format(self.rx_ctle.db_vals[k]))
+            step = get_combined_step(rx_imp, self.channel.imp).trim(self.channel.imp.n)
             self.steps.append(step)
         self.yss = min(step.yss for step in self.steps)
 
@@ -135,6 +100,10 @@ class Emulation:
         # create verilog packages
         self.tx_ffe_rom_name = 'tx_ffe_rom' + '.' + self.rom_ext
         self.create_packages()
+
+        # write output
+        self.write_packages()
+        self.write_rom_files()
 
     def set_time_format(self):
         # the following are full formats, with associated widths
@@ -268,11 +237,11 @@ class Emulation:
              filter_bias_rom_name) in zip(self.filter_pwl_tables,
                                           self.filter_segment_rom_names,
                                           self.filter_bias_rom_names):
-            filter_pwl_table.write_segment_table(os.path.join(self.rom_dir_path, filter_segment_rom_name))
-            filter_pwl_table.write_bias_table(os.path.join(self.rom_dir_path, filter_bias_rom_name))
+            filter_pwl_table.write_segment_table(os.path.join(self.rom_dir, filter_segment_rom_name))
+            filter_pwl_table.write_bias_table(os.path.join(self.rom_dir, filter_bias_rom_name))
 
     def write_tx_ffe_rom_file(self):
-        self.tx_ffe.write_table(file_name=os.path.join(self.rom_dir_path, self.tx_ffe_rom_name),
+        self.tx_ffe.write_table(file_name=os.path.join(self.rom_dir, self.tx_ffe_rom_name),
                                 fixed_format=self.in_fmt)
 
     def create_filter_package(self, name='filter_package'):
@@ -360,15 +329,12 @@ class Emulation:
         self.create_tx_package()
 
     def write_packages(self):
-        self.filter_package.write_to_file()
-        self.time_package.write_to_file()
-        self.signal_package.write_to_file()
-        self.tx_package.write_to_file()
+        self.filter_package.write(self.build_dir)
+        self.time_package.write(self.build_dir)
+        self.signal_package.write(self.build_dir)
+        self.tx_package.write(self.build_dir)
 
     def write_rom_files(self):
-        # create ROM directory if necessary
-        pathlib.Path(self.rom_dir_path).mkdir(parents=True, exist_ok=True)
-
         self.write_filter_rom_files()
         self.write_tx_ffe_rom_file()
 
@@ -516,6 +482,59 @@ class ClockWithJitter:
     @property
     def T_max_float(self):
         return self.T_max_int * self.time_fmt.res
+
+def main(plot_dt=1e-12):
+    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
+
+    parser = get_parser()
+    args = parser.parse_args()
+
+    err = ErrorBudget()
+    emu = Emulation(err=err,
+                    build_dir=args.build_dir,
+                    channel_dir=args.channel_dir,
+                    rom_dir=args.rom_dir)
+
+    # Produce output plots
+    mkdir_p(args.data_dir)
+
+    # Plot bits used for PWL ROMs
+    bits_per_pulse = np.array([filter_pwl_table.table_size_bits for filter_pwl_table in emu.filter_pwl_tables])
+    plt.plot(bits_per_pulse)
+    plt.xlabel('Step Response #')
+    plt.ylabel('ROM Bits')
+    plt.savefig(os.path.join(args.data_dir, 'rom_bits.pdf'))
+    plt.clf()
+
+    # Plot number of segments for PWLs
+    seg_per_pulse = np.array([filter_pwl_table.n_segments for filter_pwl_table in emu.filter_pwl_tables])
+    plt.plot(seg_per_pulse)
+    plt.xlabel('Step Response #')
+    plt.ylabel('PWL Segments')
+    plt.savefig(os.path.join(args.data_dir, 'pwl_segments.pdf'))
+    plt.clf()
+
+    # Plot number of segments for PWLs
+    data_width_per_pulse = np.array([filter_pwl_table.offset_fmt.n+filter_pwl_table.slope_fmt.n for filter_pwl_table in emu.filter_pwl_tables])
+    plt.plot(data_width_per_pulse)
+    plt.xlabel('Step Response #')
+    plt.ylabel('Data Width')
+    plt.savefig(os.path.join(args.data_dir, 'pwl_data_width.pdf'))
+    plt.clf()
+
+    # Plot first step response
+    for k, step in enumerate(emu.steps):
+        plt.plot(step.t, step.v)
+
+        for filter_pwl_table in emu.filter_pwl_tables:
+            pwl = filter_pwl_table.pwls[k]
+            t_eval = pwl.domain(plot_dt)
+            plt.plot(t_eval, pwl.eval(t_eval))
+
+        plt.xlabel('Time')
+        plt.ylabel('Value')
+        plt.savefig(os.path.join(args.data_dir, 'step_resp_{}.pdf'.format(k)))
+        plt.clf()
 
 if __name__=='__main__':
     main()

@@ -2,7 +2,7 @@ import time_package::*;
 import filter_package::*;
 
 module top;
-    localparam k=`FILTER_PWL_INDEX;
+    localparam k=`PULSE_INDEX;
 
     localparam longint max_time = longint'(1)<<(longint'(FILTER_ADDR_WIDTHS[k])+longint'(FILTER_SEGMENT_WIDTHS[k]));
 

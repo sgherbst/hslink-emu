@@ -8,16 +8,21 @@ from math import floor
 import os.path
 import sys
 import argparse
+import logging
 
 from msemu.ctle import RxCTLE
+from msemu.rf import ChannelData, get_combined_imp
 from msemu.pwl import Waveform
+from msemu.cmd import get_parser, mkdir_p
 
-class SimResult:
-    def __init__(self, tx, rxp, rxn, imp, in_, out):
+class SimData:
+    def __init__(self, tx, rxp, rxn):
         self.tx = tx
         self.rxp = rxp
         self.rxn = rxn
-        self.imp = imp
+
+class IdealResult:
+    def __init__(self, in_, out):
         self.in_ = in_
         self.out = out
 
@@ -30,25 +35,35 @@ def get_imp_eff(rx_setting):
 
     return Waveform(t=t_new, v=v_new)
 
-def eval(rx_setting):
+def get_data(data_dir):
+    # determine file names
+    tx_file_name = os.path.join(data_dir, 'tx.txt')
+    rxp_file_name = os.path.join(data_dir, 'rxp.txt')
+    rxn_file_name = os.path.join(data_dir, 'rxn.txt')
+
     # read tx data
-    data_tx = genfromtxt('tx.txt', delimiter=',')
+    data_tx = genfromtxt(tx_file_name, delimiter=',')
     t_tx = data_tx[:, 0]
     v_tx = data_tx[1:, 1]
     v_tx = np.concatenate((v_tx, [v_tx[-1]]))
     tx = Waveform(t=t_tx, v=v_tx)
     
     # read rxp data (positive clock edge sampling)
-    data_rxp = genfromtxt('rxp.txt', delimiter=',')
+    data_rxp = genfromtxt(rxp_file_name, delimiter=',')
     rxp = Waveform(t=data_rxp[:, 0], v=data_rxp[:, 1])
     
     # read rxn data (negative clock edge sampling)
-    data_rxn = genfromtxt('rxn.txt', delimiter=',')
+    data_rxn = genfromtxt(rxn_file_name, delimiter=',')
     rxn = Waveform(t=data_rxn[:, 0], v=data_rxn[:, 1])
 
-    # get impulse response of channel
-    imp = get_imp_eff(rx_setting)
+    return SimData(tx=tx, rxp=rxp, rxn=rxn)
 
+def get_ideal(tx, channel_dir, rx_setting):
+    # get combined impulse response of channel and RX
+    channel = ChannelData(dir_name=channel_dir)
+    ctle = RxCTLE()
+    imp = get_combined_imp(ctle.imps[rx_setting], channel.imp).trim(channel.imp.n)
+    
     # interpolate input to impulse response timebase
     count = int(floor(tx.t[-1]/imp.dt))+1
     assert (count-1)*imp.dt <= tx.t[-1]
@@ -60,25 +75,23 @@ def eval(rx_setting):
     out_v = fftconvolve(in_v, imp.v)[:len(in_t)] * imp.dt
 
     # return waveforms
-    return SimResult(
-        tx = tx,
-        rxp = rxp,
-        rxn = rxn,
-        imp = imp,
+    return IdealResult(
         in_ = Waveform(t=in_t, v=in_v),
         out = Waveform(t=in_t, v=out_v)
     )
 
-def measure_error(result):
-    t_emu = np.concatenate((result.rxn.t, result.rxp.t))
-    v_emu = np.concatenate((result.rxn.v, result.rxp.v))
-    test_idx = t_emu <= result.out.t[-1]
+def report_error(data, ideal):
+    # compose list of times where the emulation output will be checked
+    t_emu = np.concatenate((data.rxn.t, data.rxp.t))
+    v_emu = np.concatenate((data.rxn.v, data.rxp.v))
+    test_idx = t_emu <= ideal.out.t[-1]
 
-    v_sim_interp = interp1d(result.out.t, result.out.v)(t_emu[test_idx])
+    # compute error at those times
+    v_sim_interp = interp1d(ideal.out.t, ideal.out.v)(t_emu[test_idx])
     err = v_emu[test_idx] - v_sim_interp
 
     # compute percentage error
-    v_out_abs_max = np.max(np.abs(result.out.v))
+    v_out_abs_max = np.max(np.abs(ideal.out.v))
     plus_err = np.max(err)/v_out_abs_max
     minus_err = np.min(err) / v_out_abs_max
 
@@ -87,28 +100,31 @@ def measure_error(result):
     print('error statistics: ')
     print(describe(err))
 
-    return err
-
-def plot(result):
-    plt.step(result.in_.t, result.in_.v, '-k', where='post', label='in')
-    plt.plot(result.rxp.t, result.rxp.v, 'bo', label='rxp', markersize=3)
-    plt.plot(result.rxn.t, result.rxn.v, 'ro', label='rxn', markersize=3)
-    plt.plot(result.out.t, result.out.v, '-g', label='sim')
+def plot_waveforms(data, ideal, dir_name):
+    plt.step(ideal.in_.t, ideal.in_.v, '-k', where='post', label='in')
+    plt.plot(data.rxp.t, data.rxp.v, 'bo', label='rxp', markersize=3)
+    plt.plot(data.rxn.t, data.rxn.v, 'ro', label='rxn', markersize=3)
+    plt.plot(ideal.out.t, ideal.out.v, '-g', label='sim')
     plt.ylim(-1.25, 1.25)
     plt.legend(loc='lower right')
     plt.xlabel('time')
     plt.ylabel('value')
+    plt.savefig(os.path.join(dir_name, 'transient.pdf'))
     plt.show()
 
 def main():
-    parser = argparse.ArgumentParser()
+    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
+
+    parser = get_parser()
     parser.add_argument('--rx_setting', type=int, help='Setting of the RX CTLE.')
     args = parser.parse_args()
 
-    result = eval(args.rx_setting)
+    data = get_data(args.data_dir)
+    ideal = get_ideal(tx=data.tx, channel_dir=args.channel_dir, rx_setting=args.rx_setting)
 
-    measure_error(result)
-    plot(result)
+    report_error(data=data, ideal=ideal)
+
+    plot_waveforms(data=data, ideal=ideal, dir_name=args.data_dir)
     
 if __name__=='__main__':
     main()
