@@ -198,7 +198,7 @@ class ChannelData:
             mkdir_p(self.dir_name)
 
             logging.debug('Downloading channel data.')
-            url = website + self.file_name
+            url = self.website + self.file_name
             wget.download(url, self.dir_name)
     
 def main(dt=.1e-12, T=20e-9):

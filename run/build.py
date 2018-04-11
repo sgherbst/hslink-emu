@@ -6,6 +6,7 @@ import logging, sys
 import os.path
 import pathlib
 import collections
+import json
 
 from msemu.rf import ChannelData, get_combined_step
 from msemu.pwl import Waveform
@@ -107,6 +108,7 @@ class Emulation:
         # write output
         self.write_packages()
         self.write_rom_files()
+        self.write_formats()
 
     def set_time_format(self):
         # the following are full formats, with associated widths
@@ -350,6 +352,17 @@ class Emulation:
     def write_rom_files(self):
         self.write_filter_rom_files()
         self.write_tx_ffe_rom_file()
+
+    def write_formats(self):
+        fmt_dict = {
+            'in_fmt': self.in_fmt.to_dict(),
+            'out_fmt': self.out_fmt.to_dict(),
+            'time_fmt': self.time_fmt.to_dict()
+        }
+        fmt_dict_str = json.dumps(fmt_dict, indent=2, sort_keys=True)
+        fmt_dict_file = os.path.join(self.build_dir, 'fmt_dict.json')
+        with open(fmt_dict_file, 'w') as f:
+            f.write(fmt_dict_str)
 
 class PwlTable:
     def __init__(self, pwls, high_bits_fmt, low_bits_fmt, addr_offset_int, offset_point_fmt, slope_point_fmt):

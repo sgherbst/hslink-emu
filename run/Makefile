@@ -23,16 +23,16 @@ FILTER_PWL_INDEX = 35
 # directory structure
 #########################################
 
-TOP_DIR = $(realpath ../)
+TOP_DIR = $(abspath ../)
 
-BUILD_DIR = $(realpath $(TOP_DIR)/build/)
-CHANNEL_DIR = $(realpath $(TOP_DIR)/channel/)
-CPU_DIR = $(realpath $(TOP_DIR)/cpu/)
-DATA_DIR = $(realpath $(TOP_DIR)/data/)
-FPGA_DIR = $(realpath $(TOP_DIR)/fpga/)
-SHARED_DIR = $(realpath $(TOP_DIR)/shared/)
+BUILD_DIR = $(abspath $(TOP_DIR)/build/)
+CHANNEL_DIR = $(abspath $(TOP_DIR)/channel/)
+CPU_DIR = $(abspath $(TOP_DIR)/cpu/)
+DATA_DIR = $(abspath $(TOP_DIR)/data/)
+FPGA_DIR = $(abspath $(TOP_DIR)/fpga/)
+SHARED_DIR = $(abspath $(TOP_DIR)/shared/)
 
-ROM_DIR = $(realpath $(BUILD_DIR)/roms/)
+ROM_DIR = $(abspath $(BUILD_DIR)/roms/)
 
 #########################################
 # python options
@@ -93,7 +93,7 @@ SIM_DEBUG_OPTS += +define+USE_ADC=1
 SIM_PROFILE_OPTS += -input profile.tcl
 SIM_PROFILE_OPTS += -profile
 
-.PHONY: all build check check_filter sim sim_filter sim_profile clean
+.PHONY: all build check check_ila check_filter sim sim_filter sim_profile clean
 
 all: build sim check
 
@@ -106,6 +106,9 @@ build:
 
 check:
 	$(PYTHON) check.py $(PYTHON_OPTS) --rx_setting $(RX_SETTING)
+
+check_ila:
+	$(PYTHON) check.py $(PYTHON_OPTS) --rx_setting $(RX_SETTING) --use_ila
 
 check_filter:
 	$(PYTHON) check_filter.py $(PYTHON_OPTS) --rx_setting $(RX_SETTING)

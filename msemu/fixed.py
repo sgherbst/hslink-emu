@@ -329,6 +329,15 @@ class Fixed:
     def to_unsigned(self):
         return Fixed(point_fmt=self.point_fmt, width_fmt=self.width_fmt.to_unsigned())
 
+    def to_dict(self):
+        return {
+            'point': self.point,
+            'n': self.n,
+            'signed': self.signed,
+            'min_int': self.min_int,
+            'max_int': self.max_int
+        }
+
     def align_to(self, point):
         point_fmt = PointFormat(point)
 
@@ -352,6 +361,9 @@ class Fixed:
         else:
             assert len(intvals) == 1
             return intvals[0]
+
+    def floatval(self, val_or_vals):
+        return self.point_fmt.floatval(val_or_vals)
 
     def bin_str(self, val_or_vals, func=None):
         vals = listify(val_or_vals)
@@ -387,6 +399,11 @@ class Fixed:
         # make a format that can represent all of those integers
         return Fixed(point_fmt=formats[0].point_fmt,
                      width_fmt=WidthFormat.make([min_int, max_int], signed=formats[0].signed))
+
+    @staticmethod
+    def from_dict(d):
+        return Fixed(point_fmt=PointFormat(d['point']),
+                     width_fmt=WidthFormat(n=d['n'], signed=d['signed'], min=d['min_int'], max=d['max_int']))
 
     # operator overloading
 
