@@ -1,6 +1,7 @@
 `timescale 1ns/1ps
 
 import filter_package::*;
+import path_package::*;
 
 module pwl #(
     parameter segment_rom_name = "rom.mem",
@@ -36,13 +37,13 @@ module pwl #(
     wire [segment_rom_data_width-1:0] segment_rom_data;
     myrom #(.addr_bits(segment_rom_addr_width),
             .data_bits(segment_rom_data_width),
-            .filename({`ROM_DIR, segment_rom_name})) segment_rom_i(.addr(segment_rom_addr), .dout(segment_rom_data), .clk(clk));
+            .filename({ROM_DIR, "/", segment_rom_name})) segment_rom_i(.addr(segment_rom_addr), .dout(segment_rom_data), .clk(clk));
 
     // instantiate the bias rom
     wire [bias_width-1:0] bias_rom_data;
     myrom #(.addr_bits(setting_width),
             .data_bits(bias_width),
-            .filename({`ROM_DIR, bias_rom_name})) bias_rom_i(.addr(setting), .dout(bias_rom_data), .clk(clk));
+            .filename({ROM_DIR, "/", bias_rom_name})) bias_rom_i(.addr(setting), .dout(bias_rom_data), .clk(clk));
 
     // calculate rom addr
     wire [in_diff_width-1:0] in_diff = in - addr_offset;

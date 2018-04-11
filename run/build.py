@@ -43,6 +43,7 @@ class Emulation:
                  t_trunc = 10e-9,               # time at which step response is truncated
                  build_dir = '../build/',       # where packages are stored
                  channel_dir = '../channel/',   # where channel data are stored
+                 data_dir = '../data/',         # where ADC data are stored
                  rom_dir = '../build/roms',     # where ROM files are stored
                  rom_ext = 'mem'                # file extension of ROMs
     ):
@@ -57,12 +58,14 @@ class Emulation:
         # store file output settings
         self.build_dir = os.path.abspath(build_dir)
         self.channel_dir = os.path.abspath(channel_dir)
+        self.data_dir = os.path.abspath(data_dir)
         self.rom_dir = os.path.abspath(rom_dir)
         self.rom_ext = rom_ext
         
         # create directories if necessary
         mkdir_p(self.build_dir)
         mkdir_p(self.channel_dir)
+        mkdir_p(self.data_dir)
         mkdir_p(self.rom_dir)
 
         # Get the channel model
@@ -322,17 +325,27 @@ class Emulation:
 
         self.tx_package = pack
 
+    def create_path_package(self, name='path_package'):
+        pack = VerilogPackage(name=name)
+
+        pack.add(VerilogConstant(name='ROM_DIR', value=self.rom_dir, kind='string'))
+        pack.add(VerilogConstant(name='DATA_DIR', value=self.data_dir, kind='string'))
+
+        self.path_package = pack
+
     def create_packages(self):
         self.create_filter_package()
         self.create_time_package()
         self.create_signal_package()
         self.create_tx_package()
+        self.create_path_package()
 
     def write_packages(self):
         self.filter_package.write(self.build_dir)
         self.time_package.write(self.build_dir)
         self.signal_package.write(self.build_dir)
         self.tx_package.write(self.build_dir)
+        self.path_package.write(self.build_dir)
 
     def write_rom_files(self):
         self.write_filter_rom_files()
@@ -493,7 +506,8 @@ def main(plot_dt=1e-12):
     emu = Emulation(err=err,
                     build_dir=args.build_dir,
                     channel_dir=args.channel_dir,
-                    rom_dir=args.rom_dir)
+                    rom_dir=args.rom_dir,
+                    data_dir=args.data_dir)
 
     # Produce output plots
     mkdir_p(args.data_dir)

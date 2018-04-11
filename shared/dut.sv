@@ -5,12 +5,13 @@ import signal_package::*;
 import filter_package::*;
 import tx_package::*;
 
-module dut(
-    `ifdef USE_EXT_IO
-        input wire [RX_SETTING_WIDTH-1:0] rx_setting,
-        input wire [TX_SETTING_WIDTH-1:0] tx_setting,
-        input wire rst,
-    `endif
+module dut #(
+    parameter USE_VIO=1,
+    parameter USE_ADC=0
+)(
+    input wire [RX_SETTING_WIDTH-1:0] rx_setting_ext,
+    input wire [TX_SETTING_WIDTH-1:0] tx_setting_ext,
+    input wire rst_ext,
     input wire SYSCLK_P,
     input wire SYSCLK_N,
     output wire sim_done
@@ -29,19 +30,27 @@ module dut(
                     .cke_rx_p(cke_rx_p),
                     .clk_rx_n(clk_rx_n),
                     .cke_rx_n(cke_rx_n));
-                    
+
+    // DUT I/O                    
+    wire [RX_SETTING_WIDTH-1:0] rx_setting;
+    wire [TX_SETTING_WIDTH-1:0] tx_setting;
+    wire rst;
+
     // VIO
-    `ifndef USE_EXT_IO
-        wire [RX_SETTING_WIDTH-1:0] rx_setting;
-        wire [TX_SETTING_WIDTH-1:0] tx_setting;
-        wire rst_vio;
-        vio_0 vio_0_i (
-            .clk(clk_sys),
-            .probe_out0(rst),
-            .probe_out1(rx_setting),
-            .probe_out2(tx_setting)
-        );
-    `endif
+    generate
+        if (USE_VIO == 1) begin
+            vio_0 vio_0_i (
+                .clk(clk_sys),
+                .probe_out0(rst),
+                .probe_out1(rx_setting),
+                .probe_out2(tx_setting)
+            );
+        end else begin
+            assign rx_setting = rx_setting_ext;
+            assign tx_setting = tx_setting_ext;
+            assign rst = rst_ext;
+        end
+    endgenerate
 
     // Reset generator
     (* mark_debug = "true" *) reg rst_sys;
@@ -120,27 +129,6 @@ module dut(
                              .clk(clk_sys),
                              .rst(rst_sys));
 
-    // TX signal monitor
-    adc #(.name("tx"),
-          .sig_bits(FILTER_IN_WIDTH), 
-          .sig_point(FILTER_IN_POINT)) adc_tx(.clk(clk_tx),
-                                              .time_curr(time_curr),
-                                              .sig(sig_tx));
-                                            
-    // RX rising edge signal monitor
-    adc #(.name("rxp"),
-          .sig_bits(FILTER_OUT_WIDTH),
-          .sig_point(FILTER_OUT_POINT)) adc_rxp(.clk(clk_rx_p),
-                                                .time_curr(time_curr),
-                                                .sig(sig_rx));
-  
-    // RX falling edge signal monitor                              
-    adc #(.name("rxn"),
-          .sig_bits(FILTER_OUT_WIDTH),
-          .sig_point(FILTER_OUT_POINT)) adc_rxn(.clk(clk_rx_n),
-                                                .time_curr(time_curr),
-                                                .sig(sig_rx));
-
     // monitor time
     (* mark_debug = "true" *) reg sim_done_reg;
     assign sim_done = sim_done_reg;
@@ -153,4 +141,30 @@ module dut(
             sim_done_reg <= sim_done;
         end
     end
+
+    // conditional instantiation of ADCs
+    generate
+        if (USE_ADC == 1) begin
+            // TX signal monitor
+            adc #(.name("tx"),
+                  .sig_bits(FILTER_IN_WIDTH), 
+                  .sig_point(FILTER_IN_POINT)) adc_tx(.clk(clk_tx),
+                                                      .time_curr(time_curr),
+                                                      .sig(sig_tx));
+                                                    
+            // RX rising edge signal monitor
+            adc #(.name("rxp"),
+                  .sig_bits(FILTER_OUT_WIDTH),
+                  .sig_point(FILTER_OUT_POINT)) adc_rxp(.clk(clk_rx_p),
+                                                        .time_curr(time_curr),
+                                                        .sig(sig_rx));
+          
+            // RX falling edge signal monitor                              
+            adc #(.name("rxn"),
+                  .sig_bits(FILTER_OUT_WIDTH),
+                  .sig_point(FILTER_OUT_POINT)) adc_rxn(.clk(clk_rx_n),
+                                                        .time_curr(time_curr),
+                                                        .sig(sig_rx));
+        end
+    endgenerate
 endmodule

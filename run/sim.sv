@@ -11,6 +11,10 @@ import filter_package::*;
     `define TX_SETTING 'd10
 `endif
 
+`ifndef USE_ADC
+    `define USE_ADC 0
+`endif
+
 module tb;
     wire [RX_SETTING_WIDTH-1:0] rx_setting = `RX_SETTING;
     wire [TX_SETTING_WIDTH-1:0] tx_setting = `TX_SETTING;
@@ -36,12 +40,14 @@ module tb;
         rst = 1'b0;
     end
 
-    dut dut_i(.SYSCLK_P(SYSCLK_P),    
+    dut #(.USE_VIO(0),
+          .USE_ADC(`USE_ADC)) dut_i(
+              .SYSCLK_P(SYSCLK_P),    
               .SYSCLK_N(SYSCLK_N),
               .sim_done(sim_done),
-              .tx_setting(tx_setting),
-              .rx_setting(rx_setting),
-              .rst(rst));
+              .tx_setting_ext(tx_setting),
+              .rx_setting_ext(rx_setting),
+              .rst_ext(rst));
 
     always @(sim_done) begin
         if (sim_done == 1'b1) begin

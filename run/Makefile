@@ -53,14 +53,14 @@ GIT = git
 #########################################
 # simulation options
 #########################################
-
-SIM_CMD = ncverilog
+SIM_CMD = irun
 
 # packages
 SIM_PACK_LIST += time_package.sv
 SIM_PACK_LIST += signal_package.sv
 SIM_PACK_LIST += filter_package.sv
 SIM_PACK_LIST += tx_package.sv
+SIM_PACK_LIST += path_package.sv
 SIM_PACKS = $(addprefix $(BUILD_DIR)/,$(SIM_PACK_LIST))
 
 # libraries
@@ -71,9 +71,6 @@ SIM_LIBS = $(addprefix -y ,$(SIM_LIB_LIST))
 # defines
 SIM_DEF_LIST += RX_SETTING=$(RX_SETTING)
 SIM_DEF_LIST += TX_SETTING=$(TX_SETTING)
-SIM_DEF_LIST += ROM_DIR=\"$(ROM_DIR)/\"
-SIM_DEF_LIST += DATA_DIR=\"$(DATA_DIR)/\"
-SIM_DEF_LIST += USE_EXT_IO
 SIM_DEFS = $(addprefix +define+,$(SIM_DEF_LIST))
 
 # add other options
@@ -90,11 +87,11 @@ SIM_OPTS += +nc64bit
 # standard simulation (slow but more visibility)
 SIM_DEBUG_OPTS += -input sim.tcl
 SIM_DEBUG_OPTS += -access +rwc
+SIM_DEBUG_OPTS += +define+USE_ADC=1
 
 # profile simulation (fast but no visibility)
 SIM_PROFILE_OPTS += -input profile.tcl
 SIM_PROFILE_OPTS += -profile
-SIM_PROFILE_OPTS += +define+PROFILE
 
 .PHONY: all build check check_filter sim sim_filter sim_profile clean
 
@@ -131,4 +128,4 @@ sim_profile:
 #########################
 
 clean:
-	$(GIT) git clean -xdf -e build/ -e data/ -e channel/
+	$(GIT) clean -xdf -e build/ -e data/ -e channel/

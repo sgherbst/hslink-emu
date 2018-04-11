@@ -3,6 +3,7 @@
 import filter_package::*;
 import tx_package::*;
 import signal_package::*;
+import path_package::*;
 
 module tx_ffe (
     input in,
@@ -18,7 +19,7 @@ module tx_ffe (
     wire [FILTER_IN_WIDTH-1:0] rom_data;
     myrom #(.addr_bits(rom_addr_width),
             .data_bits(FILTER_IN_WIDTH),
-            .filename({`ROM_DIR, TX_FFE_ROM_NAME})) myrom_i(.addr(rom_addr), .dout(rom_data), .clk(clk));
+            .filename({ROM_DIR, "/", TX_FFE_ROM_NAME})) myrom_i(.addr(rom_addr), .dout(rom_data), .clk(clk));
 
     // store the input history
     reg [N_TAPS-2:0] in_hist;

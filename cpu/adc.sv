@@ -1,4 +1,5 @@
 import time_package::*;
+import path_package::*;
 
 module adc #(
     parameter name = "adc",
@@ -15,7 +16,7 @@ module adc #(
 
     integer f;
     initial begin
-        f = $fopen({`DATA_DIR, name, ext}, "w");
+        f = $fopen({DATA_DIR, "/", name, ext}, "w");
     end
 
     TIME_FORMAT time_samp;

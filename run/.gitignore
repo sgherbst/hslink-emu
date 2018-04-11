@@ -1,5 +1,6 @@
 .simvision
 INCA_libs
+xcelium.d
 *.out
 *.history
 *.log
