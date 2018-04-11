@@ -109,15 +109,23 @@ class VerilogTypedef:
 class VerilogPackage:
     def __init__(self, name='globals', time_unit='1ns', time_res='1ps', use_timescale=True):
         self.name = name
-        self.vars = {}
+        self.vars = []
+        self.var_names = set()
         self.time_unit = time_unit
         self.time_res = time_res
         self.use_timescale = use_timescale
 
     def add(self, var):
-        # make sure that
-        assert var.name not in self.vars
-        self.vars[var.name] = var
+        # note: a dictionary is not used here to ensure a well-defined output order
+        # this is helpful when comparing the output of various versions of the 
+        # build program
+
+        # make sure that we haven't already added a variable with this name
+        assert var.name not in self.var_names
+        self.var_names.add(var.name)
+
+        # add the variable
+        self.vars.append(var)
 
     def add_fixed_format(self, format, prefix):
         self.add(VerilogConstant(name = prefix.upper()+'_WIDTH',
@@ -141,7 +149,7 @@ class VerilogPackage:
             
         retval += 'package ' + self.name + ';\n'
         retval += '\n'
-        for var in self.vars.values():
+        for var in self.vars:
             retval += '    ' + str(var) + ';\n'
         retval += '\n'
         retval += 'endpackage // ' + self.name + '\n'

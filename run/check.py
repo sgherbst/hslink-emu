@@ -26,15 +26,6 @@ class IdealResult:
         self.in_ = in_
         self.out = out
 
-def get_imp_eff(rx_setting):
-    # compute the impulse response
-    rx_ctle = RxCTLE()
-    step = rx_ctle.get_combined_step(rx_setting)
-    v_new = np.diff(step.v)/step.dt
-    t_new = step.t[:-1]    
-
-    return Waveform(t=t_new, v=v_new)
-
 def get_data(data_dir):
     # determine file names
     tx_file_name = os.path.join(data_dir, 'tx.txt')
