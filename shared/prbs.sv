@@ -12,5 +12,5 @@ module prbs #(
     wire [n-1:0] state;
     assign out = state[0];
     
-    lfsr #(.n(n), .init(init)) lfsr_i (.clk(clk), .rst(rst), .state(state));
+    lfsr #(.n(n), .init(init)) lfsr_i (.clk(clk), .cke(1'b1), .rst(rst), .state(state));
 endmodule

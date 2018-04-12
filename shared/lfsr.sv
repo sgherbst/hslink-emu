@@ -9,6 +9,7 @@ module lfsr #(
 )(
     input wire clk,
     input wire rst,
+    input wire cke,
     output reg [n-1:0] state
 );
     // make sure that output width is valid
@@ -31,8 +32,10 @@ module lfsr #(
     always @(posedge clk) begin
         if (rst == 1'b1) begin
             state <= init;
-        end else begin
+        end else if (cke == 1'b1) begin
             state <= {state[n-2:0], ~lsb};
+        end else begin
+            state <= state;
         end
     end
 endmodule

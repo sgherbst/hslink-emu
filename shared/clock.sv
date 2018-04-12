@@ -4,7 +4,9 @@ import time_package::TIME_FORMAT;
 
 module clock #(
     parameter integer N = 1,
-    parameter integer TIME_INC_BITS = 1
+    parameter integer TIME_INC_BITS = 1,
+    parameter integer JITTER_WIDTH = 1,
+    parameter lfsr_init = 1
 )(
     input wire clk,
     input wire rst,
@@ -17,12 +19,16 @@ module clock #(
     // clock gating signal
     assign time_eq = (time_next == time_clock) ? 1'b1 : 1'b0;
 
+    // lfsr for jitter
+    wire [JITTER_WIDTH-1:0] jitter;
+    lfsr #(.n(JITTER_WIDTH), .init(lfsr_init)) lfsr_i(.clk(clk), .cke(time_eq), .rst(rst), .state(jitter));
+
     // clock period progression logic
     always @(posedge clk) begin
         if (rst == 1'b1) begin
             time_clock <= 0;
         end else if (time_eq == 1'b1) begin
-            time_clock <= time_clock + inc;
+            time_clock <= time_clock + inc + jitter;
         end else begin
             time_clock <= time_clock;
         end

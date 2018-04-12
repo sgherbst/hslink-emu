@@ -86,7 +86,7 @@ module dut #(
     (* mark_debug = "true" *) FILTER_OUT_FORMAT sig_rx;
     
     // Create TX clock
-    const_clock #(.INC(TX_INC)) tx_clk_i(.clk(clk_sys),
+    const_clock #(.INC(TX_INC), .JITTER_WIDTH(TX_JITTER_WIDTH), .lfsr_init(2)) tx_clk_i(.clk(clk_sys),
                                          .rst(rst_sys),
                                          .time_next(time_next),
                                          .time_clock(time_in[0]),
@@ -116,7 +116,7 @@ module dut #(
 
     // Create RX clock
     const_clock #(.N(2), 
-                  .INC(RX_INC)) rx_clk_i(.time_next(time_next),
+                  .INC(RX_INC), .JITTER_WIDTH(RX_JITTER_WIDTH), .lfsr_init(3)) rx_clk_i(.time_next(time_next),
                                          .time_clock(time_in[1]),
                                          .cke_out({cke_rx_p, cke_rx_n}),
                                          .time_eq(time_eq_rx),

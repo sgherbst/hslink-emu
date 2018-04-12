@@ -487,14 +487,14 @@ class ClockWithJitter:
         # compute jitter format
         # it is set up so that the min and max values are the absolute min and max possible in the representation,
         # since a PRBS will be used to generate them
-        jitter_min_int = time_fmt.point_fmt.intval(-jitter_pkpk/(2*phases), floor)
-        jitter_max_int = time_fmt.point_fmt.intval(jitter_pkpk/(2*phases), ceil)
-        jitter_width = max(WidthFormat.width([jitter_min_int, jitter_max_int], signed=True))
+        jitter_min_int = time_fmt.point_fmt.intval(0, floor)
+        jitter_max_int = time_fmt.point_fmt.intval(jitter_pkpk/phases, ceil)
+        jitter_width = max(WidthFormat.width([jitter_min_int, jitter_max_int], signed=False))
         self.jitter_fmt = Fixed(point_fmt=self.time_fmt.point_fmt,
-                                width_fmt=WidthFormat(jitter_width, signed=True))
+                                width_fmt=WidthFormat(jitter_width, signed=False))
 
         # compute main time format
-        self.T_nom_int = time_fmt.intval(1/(phases*freq))
+        self.T_nom_int = time_fmt.intval(1/(phases*freq)) - ((self.jitter_fmt.max_int + self.jitter_fmt.min_int)//2)
 
         # make sure the jitter isn't too large
         assert self.T_nom_int + self.jitter_fmt.min_int > 0

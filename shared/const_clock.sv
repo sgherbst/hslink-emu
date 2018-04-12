@@ -4,7 +4,9 @@ import time_package::TIME_FORMAT;
 
 module const_clock #(
     parameter integer N = 1,
-    parameter longint INC = 1
+    parameter longint INC = 1,
+    parameter JITTER_WIDTH = 1,
+    parameter lfsr_init = 1
 )(
     input wire clk,
     input wire rst,
@@ -20,7 +22,7 @@ module const_clock #(
     wire [TIME_INC_BITS-1:0] inc = INC;
 
     // instantiate the clock
-    clock #(.N(N), .TIME_INC_BITS(TIME_INC_BITS)) clock_i(.clk(clk), 
+    clock #(.N(N), .TIME_INC_BITS(TIME_INC_BITS), .JITTER_WIDTH(JITTER_WIDTH), .lfsr_init(lfsr_init)) clock_i(.clk(clk), 
                                                           .rst(rst),
                                                           .time_next(time_next),
                                                           .inc(inc),
