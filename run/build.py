@@ -16,6 +16,7 @@ from msemu.verilog import VerilogPackage, VerilogConstant
 from msemu.tx_ffe import TxFFE
 from msemu.cmd import get_parser, mkdir_p
 from msemu.lfsr import LFSR
+from msemu.clocks import TxClock, RxClock
 
 class ErrorBudget:
     # all errors are normalized to a particular value:
@@ -39,7 +40,10 @@ class Emulation:
     def __init__(self,
                  err,                           # error budget
                  t_stop = 20e-9,                # stopping time of emulation
+                 f_min = 7.5e9,                 # minimum RX frequency (with midscale jitter)
                  f_nom = 8e9,                   # nominal TX frequency
+                 f_max = 8.5e9,                 # maximum RX frequency (with midscale jitter)
+                 dco_bits = 14,                 # number of DCO bits
                  jitter_pkpk_tx = 10e-12,       # peak-to-peak jitter of TX
                  jitter_pkpk_rx = 10e-12,       # peak-to-peak jitter of RX
                  t_res = 1e-14,                 # smallest time resolution represented
@@ -53,7 +57,10 @@ class Emulation:
         # save emulation settings
         self.err = err
         self.t_stop = t_stop
+        self.f_min = f_min
         self.f_nom = f_nom
+        self.f_max = f_max
+        self.dco_bits = dco_bits
         self.jitter_pkpk_tx = jitter_pkpk_tx
         self.jitter_pkpk_rx = jitter_pkpk_rx
         self.t_res = t_res
@@ -118,8 +125,9 @@ class Emulation:
         self.time_fmt = Fixed.make([0, self.t_stop], self.t_res, signed=False)
 
     def create_clocks(self):
-        self.clk_tx = ClockWithJitter(freq=self.f_nom, jitter_pkpk=self.jitter_pkpk_tx, time_fmt=self.time_fmt)
-        self.clk_rx = ClockWithJitter(freq=self.f_nom, jitter_pkpk=self.jitter_pkpk_rx, time_fmt=self.time_fmt, phases=2)
+        self.clk_tx = TxClock(freq=self.f_nom, jitter_pkpk=self.jitter_pkpk_tx, time_fmt=self.time_fmt)
+        self.clk_rx = TxClock(freq=2*self.f_nom, jitter_pkpk=self.jitter_pkpk_rx/2, time_fmt=self.time_fmt)
+        #self.clk_rx = RxClock(fmin=self.f_min, fmax=self.f_max, bits=self.dco_bits, jitter_pkpk=self.jitter_pkpk_rx, time_fmt=self.time_fmt)
 
     def set_in_format(self):
         self.tx_ffe = TxFFE()
@@ -176,14 +184,14 @@ class Emulation:
 
     def set_num_ui(self):
         # Determine number of UIs required to ensure the full step response is covered
-        self.num_ui = int(ceil(self.t_trunc / self.clk_tx.T_min_float)) + 1
-        assert (self.num_ui-1)*self.clk_tx.T_min_float >= self.t_trunc
-        assert (self.num_ui-2)*self.clk_tx.T_min_float < self.t_trunc
+        self.num_ui = int(ceil(self.t_trunc / self.clk_tx.out_fmt.min_float)) + 1
+        assert (self.num_ui-1)*self.clk_tx.out_fmt.min_float >= self.t_trunc
+        assert (self.num_ui-2)*self.clk_tx.out_fmt.min_float < self.t_trunc
 
         logging.debug('Number of UIs: {}'.format(self.num_ui))
 
         # Set the format for the time history in the filter
-        dt_max_int = self.num_ui * self.clk_tx.T_max_int
+        dt_max_int = self.num_ui * self.clk_tx.out_fmt.max_int
         self.dt_fmt = Fixed(point_fmt=self.time_fmt.point_fmt,
                             width_fmt=WidthFormat.make([0, dt_max_int], signed=False))
 
@@ -203,8 +211,8 @@ class Emulation:
 
     def create_filter_pwl_table(self, k, addr_bits_max=18):
         # compute range of times at which PWL table will be evaluated
-        dt_start_int = k*self.clk_tx.T_min_int
-        dt_stop_int = (k+1)*self.clk_tx.T_max_int
+        dt_start_int = k*self.clk_tx.out_fmt.min_int
+        dt_stop_int = (k+1)*self.clk_tx.out_fmt.max_int
 
         # compute number of bits going into the PWL, after subtracting off dt_start_int
         pwl_time_bits = WidthFormat.width(dt_stop_int - dt_start_int, signed=False)
@@ -478,46 +486,6 @@ class PwlTable:
     @property
     def table_size_bits(self):
         return self.n_settings * self.n_segments * (self.offset_fmt.n + self.slope_fmt.n)
-
-class ClockWithJitter:
-    def __init__(self, freq, jitter_pkpk, time_fmt, phases=1):
-        # save time format
-        self.time_fmt = time_fmt
-
-        # compute jitter format
-        # it is set up so that the min and max values are the absolute min and max possible in the representation,
-        # since a PRBS will be used to generate them
-        jitter_min_int = time_fmt.point_fmt.intval(0, floor)
-        jitter_max_int = time_fmt.point_fmt.intval(jitter_pkpk/phases, ceil)
-        jitter_width = max(WidthFormat.width([jitter_min_int, jitter_max_int], signed=False))
-        self.jitter_fmt = Fixed(point_fmt=self.time_fmt.point_fmt,
-                                width_fmt=WidthFormat(jitter_width, signed=False))
-
-        # compute main time format
-        self.T_nom_int = time_fmt.intval(1/(phases*freq)) - ((self.jitter_fmt.max_int + self.jitter_fmt.min_int)//2)
-
-        # make sure the jitter isn't too large
-        assert self.T_nom_int + self.jitter_fmt.min_int > 0
-
-    @property
-    def T_nom_float(self):
-        return self.T_nom_int * self.time_fmt.res
-
-    @property
-    def T_min_int(self):
-        return self.T_nom_int + self.jitter_fmt.min_int
-
-    @property
-    def T_max_int(self):
-        return self.T_nom_int + self.jitter_fmt.max_int
-
-    @property
-    def T_min_float(self):
-        return self.T_min_int * self.time_fmt.res
-
-    @property
-    def T_max_float(self):
-        return self.T_max_int * self.time_fmt.res
 
 def main(plot_dt=1e-12):
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)

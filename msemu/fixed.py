@@ -430,6 +430,9 @@ class Fixed:
         return Fixed(point_fmt=self.point_fmt*other.point_fmt,
                      width_fmt=self.width_fmt*other.width_fmt)
 
+    def __str__(self):
+        return 'point: {}, n: {}, signed: {}, min_float: {:0.3e}, max_float: {:0.3e}, min_int: {}, max_int: {}'.format(self.point, self.n, self.signed, self.min_float, self.max_float, self.min_int, self.max_int)
+
 def main():
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
