@@ -61,6 +61,7 @@ SIM_PACK_LIST += signal_package.sv
 SIM_PACK_LIST += filter_package.sv
 SIM_PACK_LIST += tx_package.sv
 SIM_PACK_LIST += path_package.sv
+SIM_PACK_LIST += lfsr_package.sv
 SIM_PACKS = $(addprefix $(BUILD_DIR)/,$(SIM_PACK_LIST))
 
 # libraries

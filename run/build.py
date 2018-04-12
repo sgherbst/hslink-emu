@@ -15,6 +15,7 @@ from msemu.ctle import RxCTLE
 from msemu.verilog import VerilogPackage, VerilogConstant
 from msemu.tx_ffe import TxFFE
 from msemu.cmd import get_parser, mkdir_p
+from msemu.lfsr import LFSR
 
 class ErrorBudget:
     # all errors are normalized to a particular value:
@@ -39,7 +40,8 @@ class Emulation:
                  err,                           # error budget
                  t_stop = 20e-9,                # stopping time of emulation
                  f_nom = 8e9,                   # nominal TX frequency
-                 jitter_pkpk = 10e-12,          # peak-to-peak jitter of TX
+                 jitter_pkpk_tx = 10e-12,       # peak-to-peak jitter of TX
+                 jitter_pkpk_rx = 10e-12,       # peak-to-peak jitter of RX
                  t_res = 1e-14,                 # smallest time resolution represented
                  t_trunc = 10e-9,               # time at which step response is truncated
                  build_dir = '../build/',       # where packages are stored
@@ -52,7 +54,8 @@ class Emulation:
         self.err = err
         self.t_stop = t_stop
         self.f_nom = f_nom
-        self.jitter_pkpk = jitter_pkpk
+        self.jitter_pkpk_tx = jitter_pkpk_tx
+        self.jitter_pkpk_rx = jitter_pkpk_rx
         self.t_res = t_res
         self.t_trunc = t_trunc
 
@@ -115,8 +118,8 @@ class Emulation:
         self.time_fmt = Fixed.make([0, self.t_stop], self.t_res, signed=False)
 
     def create_clocks(self):
-        self.clk_tx = ClockWithJitter(freq=self.f_nom, jitter_pkpk=self.jitter_pkpk, time_fmt=self.time_fmt)
-        self.clk_rx = ClockWithJitter(freq=self.f_nom, jitter_pkpk=self.jitter_pkpk, time_fmt=self.time_fmt, phases=2)
+        self.clk_tx = ClockWithJitter(freq=self.f_nom, jitter_pkpk=self.jitter_pkpk_tx, time_fmt=self.time_fmt)
+        self.clk_rx = ClockWithJitter(freq=self.f_nom, jitter_pkpk=self.jitter_pkpk_rx, time_fmt=self.time_fmt, phases=2)
 
     def set_in_format(self):
         self.tx_ffe = TxFFE()
@@ -302,6 +305,8 @@ class Emulation:
         # add time formats
         pack.add_fixed_format(self.time_fmt, 'TIME')
         pack.add_fixed_format(self.dt_fmt, 'DT')
+        pack.add_fixed_format(self.clk_tx.jitter_fmt, 'TX_JITTER')
+        pack.add_fixed_format(self.clk_rx.jitter_fmt, 'RX_JITTER')
 
         pack.add(VerilogConstant(name='TX_INC', value=self.clk_tx.T_nom_int, kind='longint'))
         pack.add(VerilogConstant(name='RX_INC', value=self.clk_rx.T_nom_int, kind='longint'))
@@ -335,12 +340,16 @@ class Emulation:
 
         self.path_package = pack
 
+    def create_lfsr_package(self, name='lfsr_package'):
+        self.lfsr_package = LFSR().get_package(name=name)
+
     def create_packages(self):
         self.create_filter_package()
         self.create_time_package()
         self.create_signal_package()
         self.create_tx_package()
         self.create_path_package()
+        self.create_lfsr_package()
 
     def write_packages(self):
         self.filter_package.write(self.build_dir)
@@ -348,6 +357,7 @@ class Emulation:
         self.signal_package.write(self.build_dir)
         self.tx_package.write(self.build_dir)
         self.path_package.write(self.build_dir)
+        self.lfsr_package.write(self.build_dir)
 
     def write_rom_files(self):
         self.write_filter_rom_files()
@@ -477,8 +487,8 @@ class ClockWithJitter:
         # compute jitter format
         # it is set up so that the min and max values are the absolute min and max possible in the representation,
         # since a PRBS will be used to generate them
-        jitter_min_int = time_fmt.point_fmt.intval(-jitter_pkpk/2, floor)
-        jitter_max_int = time_fmt.point_fmt.intval(jitter_pkpk/2, ceil)
+        jitter_min_int = time_fmt.point_fmt.intval(-jitter_pkpk/(2*phases), floor)
+        jitter_max_int = time_fmt.point_fmt.intval(jitter_pkpk/(2*phases), ceil)
         jitter_width = max(WidthFormat.width([jitter_min_int, jitter_max_int], signed=True))
         self.jitter_fmt = Fixed(point_fmt=self.time_fmt.point_fmt,
                                 width_fmt=WidthFormat(jitter_width, signed=True))

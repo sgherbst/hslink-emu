@@ -52,7 +52,7 @@ module dut #(
         end
     endgenerate
 
-    // Reset generator
+    // rst_sys generator 
     (* mark_debug = "true" *) reg rst_sys;
     always @(posedge clk_sys) begin
         if (rst == 1'b1) begin
@@ -62,6 +62,7 @@ module dut #(
         end
     end
     
+    // rst_tx generator
     (* mark_debug = "true" *) reg rst_tx;
     always @(posedge clk_sys) begin
         if (rst == 1'b1) begin
@@ -73,7 +74,7 @@ module dut #(
         end
     end
 
-    // Time management signals
+    // Time management
     TIME_FORMAT time_in [0:1];
     (* mark_debug = "true" *) TIME_FORMAT time_curr;
     TIME_FORMAT time_next;
@@ -84,7 +85,7 @@ module dut #(
     (* mark_debug = "true" *) FILTER_IN_FORMAT sig_tx;
     (* mark_debug = "true" *) FILTER_OUT_FORMAT sig_rx;
     
-    // create TX clock
+    // Create TX clock
     const_clock #(.INC(TX_INC)) tx_clk_i(.clk(clk_sys),
                                          .rst(rst_sys),
                                          .time_next(time_next),
@@ -92,19 +93,19 @@ module dut #(
                                          .cke_out(cke_tx),
                                          .time_eq(time_eq_tx));
 
-    // create random data generator
+    // Create random data generator
     prbs prbs_i(.out(out_tx),
                 .clk(clk_tx),
                 .rst(rst_tx));
 
-    // drive data into channel
+    // Drive data into channel
     tx_ffe tx_ffe_i(.in(out_tx),
                     .out(sig_tx),
                     .tx_setting(tx_setting),
                     .clk(clk_tx),
                     .rst(rst_tx));
 
-    // filter data stream according to channel + CTLE dynamics
+    // Filter data stream according to channel + CTLE dynamics
     filter filter_i(.in(sig_tx),
                     .time_eq_in(time_eq_tx),
                     .out(sig_rx),
@@ -113,7 +114,7 @@ module dut #(
                     .clk(clk_sys),
                     .rst(rst_sys));
 
-    // create RX clock
+    // Create RX clock
     const_clock #(.N(2), 
                   .INC(RX_INC)) rx_clk_i(.time_next(time_next),
                                          .time_clock(time_in[1]),
@@ -122,14 +123,14 @@ module dut #(
                                          .clk(clk_sys),
                                          .rst(rst_sys));
 
-    // create time manager
+    // Create time manager
     time_manager #(.N(2)) tm(.time_in(time_in),
                              .time_next(time_next),
                              .time_curr(time_curr),
                              .clk(clk_sys),
                              .rst(rst_sys));
 
-    // monitor time
+    // Monitor time
     (* mark_debug = "true" *) reg sim_done_reg;
     assign sim_done = sim_done_reg;
     always @(posedge clk_sys) begin

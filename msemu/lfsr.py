@@ -7,7 +7,7 @@ class LFSR:
             taps = val.split(',')
             self._poly_dict[key] = [int(tap.strip()) for tap in taps]
 
-    def write_package(self, dir_name, name='lfsr_package'):
+    def get_package(self, name='lfsr_package'):
         # find out the largest number of taps covered
         n_max = max(self.poly_dict.keys())
 
@@ -41,7 +41,8 @@ class LFSR:
         pack = VerilogPackage(name)
         pack.add(VerilogConstant(name='LFSR_N_TAPS', value=n_taps_array, kind='int'))
         pack.add(VerilogConstant(name='LFSR_TAPS', value=taps2d, kind='int'))
-        pack.write(dir_name)
+        
+        return pack
 
     @property
     def poly_dict(self):

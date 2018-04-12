@@ -9,11 +9,10 @@ module mysum #(
     output reg signed [out_bits-1:0] out
 );
     // reference: https://stackoverflow.com/questions/26488295/is-there-a-way-to-sum-multi-dimensional-arrays-in-verilog
-    integer idx;
-    always @* begin
+    always_comb begin
         out = 0;
-        for (idx=0; idx<in_terms; idx=idx+1) begin
-            out = out + in[idx];
+        for (int k=0; k<in_terms; k=k+1) begin
+            out = out + in[k];
         end
     end
 endmodule
