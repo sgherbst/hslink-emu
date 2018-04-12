@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-module mymult #(
+module my_mult_signed #(
     parameter a_bits=1,
     parameter a_point=1,
     parameter b_bits=1,

@@ -54,32 +54,53 @@ class TxClock(Clock):
         super().__init__(period_fmt=period_fmt, jitter_fmt=jitter_fmt)
 
 class RxClock(Clock):
-    def __init__(self, fmin, fmax, bits, jitter_pkpk, time_fmt, phases=2):
+    def __init__(self, finit, fmin, fmax, bits, jitter_pkpk, time_fmt, phases=2):
+        # store settings
+        self.finit = finit
+        self.phases = phases
+
         # determine jitter format
-        jitter_fmt = JitterFormat(jitter_pkpk=jitter_pkpk/phases, time_fmt=time_fmt)
+        jitter_fmt = JitterFormat(jitter_pkpk=jitter_pkpk/self.phases, time_fmt=time_fmt)
 
         # determine DCO code format
         self.code_fmt = Fixed(point_fmt=PointFormat(0),
                               width_fmt=WidthFormat(n=bits, signed=False))
 
         # determine the slope
-        t_min_no_jitter = 1/(phases*fmax)
-        t_max_no_jitter = 1/(phases*fmin)
-        slope = (t_max_no_jitter - t_min_no_jitter)/self.code_fmt.max_float
-        assert slope > 0
+        t_min_no_jitter = 1/(self.phases*fmax)
+        t_max_no_jitter = 1/(self.phases*fmin)
+        self.slope_float = (t_max_no_jitter - t_min_no_jitter)/self.code_fmt.max_float
+        assert self.slope_float > 0
 
         # determine slope representation
-        slope_res = 0.5*slope/self.code_fmt.max_float
-        self.slope_fmt = Fixed.make(slope, res=slope_res, signed=False) 
+        slope_res = 0.5*self.slope_float/self.code_fmt.max_float
+        self.slope_fmt = Fixed.make(self.slope_float, res=slope_res, signed=False) 
 
         # determine offset representation
-        offset = t_max_no_jitter - jitter_fmt.mid_float
-        self.offset_fmt = time_fmt.point_fmt.to_fixed(offset, signed=False)
+        self.offset_float = t_max_no_jitter - jitter_fmt.mid_float
+        self.offset_fmt = time_fmt.point_fmt.to_fixed(self.offset_float, signed=False)
         
         # determine period format
-        period_fmt = self.offset_fmt - (self.code_fmt * self.slope_fmt).align_to(self.offset_fmt.point)
+        self.prod_fmt = (self.code_fmt * self.slope_fmt).align_to(self.offset_fmt.point)
+        period_fmt = self.offset_fmt - self.prod_fmt
 
         super().__init__(period_fmt=period_fmt, jitter_fmt=jitter_fmt)
+
+    @property
+    def slope_int(self):
+        return self.slope_fmt.intval(self.slope_float)
+
+    @property
+    def offset_int(self):
+        return self.offset_fmt.intval(self.offset_float)
+
+    @property
+    def code_init(self):
+        tinit = 1/(self.phases*self.finit)
+        retval = round((self.offset_float+self.jitter_fmt.mid_float-tinit)/self.slope_float)
+
+        assert self.code_fmt.min_int <= retval <= self.code_fmt.max_int
+        return retval
 
 def main():
     time_fmt = Fixed.make([0, 10e-6], res=1e-14, signed=False)
@@ -89,12 +110,14 @@ def main():
     print('tx period:', str(tx_clk.period_fmt))
     print()
 
-    rx_clk = RxClock(fmin=7.5e9, fmax=8.5e9, bits=14, jitter_pkpk=10e-12, time_fmt=time_fmt)
+    rx_clk = RxClock(finit=8e9, fmin=7.5e9, fmax=8.5e9, bits=14, jitter_pkpk=10e-12, time_fmt=time_fmt)
     print('rx jitter:', str(rx_clk.jitter_fmt))
     print('rx period:', str(rx_clk.period_fmt))
+    print('rx product:', str(rx_clk.prod_fmt))
     print('rx code:', str(rx_clk.code_fmt))
     print('rx slope:', str(rx_clk.slope_fmt))
     print('rx offset:', str(rx_clk.offset_fmt))
+    print('rx code init:', str(rx_clk.code_init))
 
 if __name__=='__main__':
     main()

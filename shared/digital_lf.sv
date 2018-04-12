@@ -4,20 +4,25 @@
 
 module digital_lf #(
     parameter N = 14,                                                // width of output
-    parameter [N-1:0] init = longint'(1)<<(longint'(N)-longint'(1)), // starting state of the filter
     parameter integer Kp=256,                                        // proportional gain
     parameter integer Ki=1                                           // integral gain
 )(
     input clk,                      // triggering clock
+    input rst,                      // reset signal
+    input [N-1:0] init,             // initialization signal
     input up,                       // up signal from phase detector
     input dn,                       // down signal from phase detector
-    output reg [N-1:0] out = init   // output signal
+    output reg [N-1:0] out          // output signal
 );
     // save previous state of the inputs
     wire [1:0] curr = {up, dn};
     reg [1:0] prev = 2'b00;
     always @(posedge clk) begin
-        prev <= curr;
+        if (rst == 1'b1) begin
+            prev <= 2'b00;
+        end else begin
+            prev <= curr;
+        end
     end
     
     // combo logic for term a
@@ -44,6 +49,10 @@ module digital_lf #(
 
     // state update logic
     always @(posedge clk) begin
-        out <= out + a + b;
+        if (rst == 1'b1) begin
+            out <= init;
+        end else begin
+            out <= out + a + b;
+        end
     end
 endmodule

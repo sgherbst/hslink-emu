@@ -99,7 +99,7 @@ module filter (
             end
 
             // products
-            mymult #(.a_bits(FILTER_PULSE_WIDTH),
+            my_mult_signed #(.a_bits(FILTER_PULSE_WIDTH),
                      .a_point(FILTER_PULSE_POINT),
                      .b_bits(FILTER_IN_WIDTH),
                      .b_point(FILTER_IN_POINT),

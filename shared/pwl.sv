@@ -68,7 +68,7 @@ module pwl #(
 
     // compute linear correction
     wire signed [prod_width-1:0] prod;
-    mymult #(.a_bits(segment_width+1), // add one to segment width to account for conversion to signed number
+    my_mult_signed #(.a_bits(segment_width+1), // add one to segment width to account for conversion to signed number
              .a_point(in_point),
              .b_bits(slope_width),
              .b_point(slope_point),

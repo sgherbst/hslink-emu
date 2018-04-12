@@ -4,14 +4,14 @@ import time_package::TIME_FORMAT;
 
 module clock #(
     parameter integer N = 1,
-    parameter integer TIME_INC_BITS = 1,
+    parameter integer PERIOD_WIDTH = 1,
     parameter integer JITTER_WIDTH = 1,
     parameter lfsr_init = 1
 )(
     input wire clk,
     input wire rst,
     input TIME_FORMAT time_next,
-    input wire [TIME_INC_BITS-1:0] inc,
+    input wire [PERIOD_WIDTH-1:0] period,
     output TIME_FORMAT time_clock,
     output reg [N-1:0] cke_out,
     output wire time_eq
@@ -28,7 +28,7 @@ module clock #(
         if (rst == 1'b1) begin
             time_clock <= 0;
         end else if (time_eq == 1'b1) begin
-            time_clock <= time_clock + inc + jitter;
+            time_clock <= time_clock + period + jitter;
         end else begin
             time_clock <= time_clock;
         end

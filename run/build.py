@@ -40,9 +40,10 @@ class Emulation:
     def __init__(self,
                  err,                           # error budget
                  t_stop = 20e-9,                # stopping time of emulation
-                 f_min = 7.5e9,                 # minimum RX frequency (with midscale jitter)
-                 f_nom = 8e9,                   # nominal TX frequency
-                 f_max = 8.5e9,                 # maximum RX frequency (with midscale jitter)
+                 f_rx_min = 7.5e9,              # minimum RX frequency
+                 f_rx_max = 8.5e9,              # maximum RX frequency
+                 f_rx_init = 7.95e9,            # initial RX frequency 
+                 f_tx_nom = 8e9,                # nominal TX frequency
                  dco_bits = 14,                 # number of DCO bits
                  jitter_pkpk_tx = 10e-12,       # peak-to-peak jitter of TX
                  jitter_pkpk_rx = 10e-12,       # peak-to-peak jitter of RX
@@ -57,9 +58,10 @@ class Emulation:
         # save emulation settings
         self.err = err
         self.t_stop = t_stop
-        self.f_min = f_min
-        self.f_nom = f_nom
-        self.f_max = f_max
+        self.f_rx_min = f_rx_min
+        self.f_rx_max = f_rx_max
+        self.f_rx_init = f_rx_init
+        self.f_tx_nom = f_tx_nom
         self.dco_bits = dco_bits
         self.jitter_pkpk_tx = jitter_pkpk_tx
         self.jitter_pkpk_rx = jitter_pkpk_rx
@@ -125,9 +127,8 @@ class Emulation:
         self.time_fmt = Fixed.make([0, self.t_stop], self.t_res, signed=False)
 
     def create_clocks(self):
-        self.clk_tx = TxClock(freq=self.f_nom, jitter_pkpk=self.jitter_pkpk_tx, time_fmt=self.time_fmt)
-        self.clk_rx = TxClock(freq=2*self.f_nom, jitter_pkpk=self.jitter_pkpk_rx/2, time_fmt=self.time_fmt)
-        #self.clk_rx = RxClock(fmin=self.f_min, fmax=self.f_max, bits=self.dco_bits, jitter_pkpk=self.jitter_pkpk_rx, time_fmt=self.time_fmt)
+        self.clk_tx = TxClock(freq=self.f_tx_nom, jitter_pkpk=self.jitter_pkpk_tx, time_fmt=self.time_fmt)
+        self.clk_rx = RxClock(finit=self.f_rx_init, fmin=self.f_rx_min, fmax=self.f_rx_max, bits=self.dco_bits, jitter_pkpk=self.jitter_pkpk_rx, time_fmt=self.time_fmt)
 
     def set_in_format(self):
         self.tx_ffe = TxFFE()
@@ -313,11 +314,24 @@ class Emulation:
         # add time formats
         pack.add_fixed_format(self.time_fmt, 'TIME')
         pack.add_fixed_format(self.dt_fmt, 'DT')
-        pack.add_fixed_format(self.clk_tx.jitter_fmt, 'TX_JITTER')
-        pack.add_fixed_format(self.clk_rx.jitter_fmt, 'RX_JITTER')
 
-        pack.add(VerilogConstant(name='TX_INC', value=self.clk_tx.T_nom_int, kind='longint'))
-        pack.add(VerilogConstant(name='RX_INC', value=self.clk_rx.T_nom_int, kind='longint'))
+        # TX clock
+        pack.add_fixed_format(self.clk_tx.jitter_fmt, 'TX_JITTER')
+        pack.add_fixed_format(self.clk_tx.period_fmt, 'TX_PERIOD')
+        pack.add(VerilogConstant(name='TX_PERIOD_VAL', value=self.clk_tx.T_nom_int, kind='longint'))
+
+        # RX clock
+        pack.add_fixed_format(self.clk_rx.jitter_fmt, 'RX_JITTER')
+        pack.add_fixed_format(self.clk_rx.period_fmt, 'DCO_PERIOD')
+        pack.add_fixed_format(self.clk_rx.code_fmt, 'DCO_CODE')
+        pack.add_fixed_format(self.clk_rx.offset_fmt, 'DCO_OFFSET')
+        pack.add_fixed_format(self.clk_rx.slope_fmt, 'DCO_SLOPE')
+        pack.add_fixed_format(self.clk_rx.prod_fmt, 'DCO_PROD')
+        pack.add(VerilogConstant(name='DCO_SLOPE_VAL', value=self.clk_rx.slope_int, kind='longint'))
+        pack.add(VerilogConstant(name='DCO_OFFSET_VAL', value=self.clk_rx.offset_int, kind='longint'))
+        pack.add(VerilogConstant(name='DCO_CODE_INIT', value=self.clk_rx.code_init, kind='longint'))
+
+        # Stopping time
         pack.add(VerilogConstant(name='TIME_STOP', value=self.time_fmt.intval(self.t_stop), kind='longint'))
 
         self.time_package = pack

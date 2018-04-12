@@ -2,6 +2,7 @@
 
 import tx_package::*;
 import filter_package::*;
+import time_package::*;
 
 `ifndef RX_SETTING
     `define RX_SETTING 'd0
@@ -18,6 +19,7 @@ import filter_package::*;
 module tb;
     wire [RX_SETTING_WIDTH-1:0] rx_setting = `RX_SETTING;
     wire [TX_SETTING_WIDTH-1:0] tx_setting = `TX_SETTING;
+    wire [DCO_CODE_WIDTH-1:0] dco_init = DCO_CODE_INIT;
 
     wire sim_done;
     reg SYSCLK_P = 1'b0;
@@ -40,14 +42,18 @@ module tb;
         rst = 1'b0;
     end
 
-    dut #(.USE_VIO(0),
-          .USE_ADC(`USE_ADC)) dut_i(
-              .SYSCLK_P(SYSCLK_P),    
-              .SYSCLK_N(SYSCLK_N),
-              .sim_done(sim_done),
-              .tx_setting_ext(tx_setting),
-              .rx_setting_ext(rx_setting),
-              .rst_ext(rst));
+    dut #(
+        .USE_VIO(0),
+        .USE_ADC(`USE_ADC)
+    ) dut_i(
+        .SYSCLK_P(SYSCLK_P),    
+        .SYSCLK_N(SYSCLK_N),
+        .sim_done(sim_done),
+        .rst_ext(rst),
+        .rx_setting_ext(rx_setting),
+        .tx_setting_ext(tx_setting),
+        .dco_init_ext(dco_init)
+    );
 
     always @(sim_done) begin
         if (sim_done == 1'b1) begin
