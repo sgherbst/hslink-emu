@@ -1,7 +1,9 @@
 `timescale 1ns/1ps
 
+import signal_package::*;
+
 module comp (
-    input signal_t in,
+    input FILTER_OUT_FORMAT in,
     input clk,
     output reg out=1'b0
 );

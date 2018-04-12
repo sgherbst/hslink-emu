@@ -5,9 +5,16 @@ import signal_package::*;
 import filter_package::*;
 import tx_package::*;
 
+
 module dut #(
     parameter USE_VIO=1,
-    parameter USE_ADC=0
+    parameter USE_ADC=0,
+
+    // loop filter
+    parameter KP_LF=256,
+    parameter KI_LF=1,
+    parameter DCO_INIT=8192,
+    parameter DCO_BITS=14
 )(
     input wire [RX_SETTING_WIDTH-1:0] rx_setting_ext,
     input wire [TX_SETTING_WIDTH-1:0] tx_setting_ext,
@@ -113,6 +120,14 @@ module dut #(
                     .rx_setting(rx_setting),
                     .clk(clk_sys),
                     .rst(rst_sys));
+
+    // Bang-band phase detector
+    wire out_rx, up, dn;
+    bbpd bbpd_i(.in(sig_rx), .clk(clk_rx_p), .clkb(clk_rx_n), .data(out_rx), .up(up), .dn(dn));
+
+    // Digital loop filter
+    wire [DCO_BITS-1:0] dco_code;
+    digital_lf #(.N(DCO_BITS), .Kp(KP_LF), .Ki(KI_LF), .init(DCO_INIT)) digital_lf_i(.clk(clk_rx_p), .up(up), .dn(dn), .out(dco_code));
 
     // Create RX clock
     const_clock #(.N(2), 

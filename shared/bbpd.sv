@@ -3,10 +3,10 @@
 
 `timescale 1ns/1ps
 
-module bbpd #(
-    parameter sig_bits = 1
-) (
-    input signed [sig_bits-1:0] in,
+import signal_package::*;
+
+module bbpd (
+    input FILTER_OUT_FORMAT in,
     input clk, 
     input clkb,
     output data,
@@ -16,8 +16,8 @@ module bbpd #(
 
     // sample data
     wire t;
-    comp #(.sig_bits(sig_bits)) comp_p(.in(in),  .clk(clk), .out(data));
-    comp #(.sig_bits(sig_bits)) comp_n(.in(in), .clk(clkb),    .out(t));
+    comp comp_p(.in(in),  .clk(clk), .out(data));
+    comp comp_n(.in(in), .clk(clkb),    .out(t));
 
     // logic used for logic assignment
     reg a=1'b0;
