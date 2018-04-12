@@ -1,17 +1,12 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.signal import fftconvolve
 from math import ceil, floor, log2
 import logging, sys
 import os.path
-import pathlib
-import collections
 import json
 
-from msemu.rf import ChannelData, get_combined_step
-from msemu.pwl import Waveform
 from msemu.fixed import Fixed, PointFormat, WidthFormat
-from msemu.ctle import RxCTLE
+from msemu.ctle import RxDynamics
 from msemu.verilog import VerilogPackage, VerilogConstant
 from msemu.tx_ffe import TxFFE
 from msemu.cmd import get_parser, mkdir_p
@@ -25,11 +20,12 @@ class ErrorBudget:
     # yss: normalized to yss
     # R_in*yss: normalized to R_in*yss
 
-    def __init__(self,
-                 in_ = 1e-4,            # error in input quantization [R_in]
-                 pwl = 1e-3,            # error in pwl segment representation [yss]
-                 step = 1e-4,           # error in step quantization [yss]
-                 prod = 1e-4            # error in product of pulse response and input quantization [R_in*yss]
+    def __init__(
+        self,
+        in_ = 1e-4,            # error in input quantization [R_in]
+        pwl = 1e-3,            # error in pwl segment representation [yss]
+        step = 1e-4,           # error in step quantization [yss]
+        prod = 1e-4            # error in product of pulse response and input quantization [R_in*yss]
     ):
         self.pwl = pwl
         self.step = step
@@ -37,23 +33,24 @@ class ErrorBudget:
         self.in_ = in_
 
 class Emulation:
-    def __init__(self,
-                 err,                           # error budget
-                 t_stop = 20e-9,                # stopping time of emulation
-                 f_rx_min = 7.5e9,              # minimum RX frequency
-                 f_rx_max = 8.5e9,              # maximum RX frequency
-                 f_rx_init = 7.95e9,            # initial RX frequency 
-                 f_tx_nom = 8e9,                # nominal TX frequency
-                 dco_bits = 14,                 # number of DCO bits
-                 jitter_pkpk_tx = 10e-12,       # peak-to-peak jitter of TX
-                 jitter_pkpk_rx = 10e-12,       # peak-to-peak jitter of RX
-                 t_res = 1e-14,                 # smallest time resolution represented
-                 t_trunc = 10e-9,               # time at which step response is truncated
-                 build_dir = '../build/',       # where packages are stored
-                 channel_dir = '../channel/',   # where channel data are stored
-                 data_dir = '../data/',         # where ADC data are stored
-                 rom_dir = '../build/roms',     # where ROM files are stored
-                 rom_ext = 'mem'                # file extension of ROMs
+    def __init__(
+        self,
+        err,                           # error budget
+        t_stop = 20e-9,                # stopping time of emulation
+        f_rx_min = 7.5e9,              # minimum RX frequency
+        f_rx_max = 8.5e9,              # maximum RX frequency
+        f_rx_init = 7.95e9,            # initial RX frequency
+        f_tx_nom = 8e9,                # nominal TX frequency
+        dco_bits = 14,                 # number of DCO bits
+        jitter_pkpk_tx = 10e-12,       # peak-to-peak jitter of TX
+        jitter_pkpk_rx = 10e-12,       # peak-to-peak jitter of RX
+        t_res = 1e-14,                 # smallest time resolution represented
+        t_trunc = 10e-9,               # time at which step response is truncated
+        build_dir = '../build/',       # where packages are stored
+        channel_dir = '../channel/',   # where channel data are stored
+        data_dir = '../data/',         # where ADC data are stored
+        rom_dir = '../build/roms',     # where ROM files are stored
+        rom_ext = 'mem'                # file extension of ROMs
     ):
         # save emulation settings
         self.err = err
@@ -81,16 +78,14 @@ class Emulation:
         mkdir_p(self.data_dir)
         mkdir_p(self.rom_dir)
 
-        # Get the channel model
-        self.channel = ChannelData(dir_name=self.channel_dir)
+        # get the RX dynamics model
+        self.rx_dyn = RxDynamics(dir_name=self.channel_dir)
 
         # Get the step responses and record the minimum steady-state value,
         # which sets precision requirements throughout the design
-        self.rx_ctle = RxCTLE()
         self.steps = []
-        for k, rx_imp in enumerate(self.rx_ctle.imps):
-            logging.debug('Computing step response for dB={:0.1f}'.format(self.rx_ctle.db_vals[k]))
-            step = get_combined_step(rx_imp, self.channel.imp).trim(self.channel.imp.n)
+        for k in range(self.rx_dyn.n):
+            step = self.rx_dyn.get_step(k)
             self.steps.append(step)
         self.yss = min(step.yss for step in self.steps)
 

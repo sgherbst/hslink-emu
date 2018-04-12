@@ -162,8 +162,10 @@ def get_combined_step(impa, impb):
     return step
 
 class ChannelData:
+    # constructor
+
     def __init__(self,
-                 dir_name='../channel/',
+                 dir_name,
                  dt=0.1e-12,
                  T=20e-9,
                  file_name='peters_01_0605_B12_thru.s4p',
@@ -176,16 +178,46 @@ class ChannelData:
         self.file_name = file_name
         self.website = website
 
+        # placeholder for memoized impulse response and step response
+        self._imp = None
+        self._step = None
+
+    # properties
+
+    @property
+    def imp(self):
+        if self._imp is None:
+            self._imp = self.calc_imp()
+        return self._imp
+
+    @property
+    def step(self):
+        if self._step is None:
+            self._step = self.calc_step()
+        return self._step
+
+    # expensive member functions
+
+    def calc_imp(self):
+        logging.debug('Calculating channel impulse response...')
+
         # get data if necessary
         self.set_channel_file()
 
         # compute impulse response
         imp_t, imp_v = s4p_to_impulse(self.channel_file, self.dt, self.T)
-        self.imp = Waveform(t=imp_t, v=imp_v)
+
+        # return waveform representing impulse response
+        return Waveform(t=imp_t, v=imp_v)
+
+    def calc_step(self):
+        logging.debug('Calculating channel step response...')
 
         # compute step response
-        step_v = imp2step(self.imp.v, self.dt)
-        self.step = Waveform(t=self.imp.t, v=step_v)
+        step_v = imp2step(imp=self.imp.v, dt=self.imp.dt)
+
+        # return waveform representing step response
+        return Waveform(t=self.imp.t, v=step_v)
 
     def set_channel_file(self):
         # determine path for channel data

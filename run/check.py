@@ -10,8 +10,7 @@ import sys
 import logging
 import json
 
-from msemu.ctle import RxCTLE
-from msemu.rf import ChannelData, get_combined_imp
+from msemu.ctle import RxDynamics
 from msemu.pwl import Waveform
 from msemu.cmd import get_parser
 from msemu.fixed import Fixed
@@ -120,11 +119,9 @@ def get_sim_data(data_dir):
 
     return Data(tx=tx, rxp=rxp, rxn=rxn)
 
-def get_ideal(tx, channel_dir, rx_setting):
+def get_ideal(rx_dyn, tx, rx_setting):
     # get combined impulse response of channel and RX
-    channel = ChannelData(dir_name=channel_dir)
-    ctle = RxCTLE()
-    imp = get_combined_imp(ctle.imps[rx_setting], channel.imp).trim(channel.imp.n)
+    imp = rx_dyn.get_imp(rx_setting)
     
     # interpolate input to impulse response timebase
     count = int(floor(tx.t[-1]/imp.dt))+1
@@ -182,13 +179,17 @@ def main():
     parser.add_argument('--use_ila', action='store_true', help='Use ILA data instead of simulation data.')
     args = parser.parse_args()
 
+    # create the RxDynamics object
+    rx_dyn = RxDynamics(dir_name=args.channel_dir)
+
     if args.use_ila:
         data = get_ila_data(build_dir=args.build_dir, data_dir=args.data_dir)
         plot_prefix = 'ila'
     else:
         data = get_sim_data(args.data_dir)
         plot_prefix = 'sim'
-    ideal = get_ideal(tx=data.tx, channel_dir=args.channel_dir, rx_setting=args.rx_setting)
+
+    ideal = get_ideal(rx_dyn=rx_dyn, tx=data.tx, rx_setting=args.rx_setting)
 
     report_error(data=data, ideal=ideal)
 
