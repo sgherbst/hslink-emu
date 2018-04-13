@@ -1,8 +1,7 @@
 from numpy import convolve
 import numpy as np
-from math import pi
+from math import pi, ceil, log2
 from scipy.signal import impulse
-from scipy.signal import fftconvolve
 import logging
 import sys
 
@@ -17,6 +16,11 @@ class RxDynamics:
         dt=0.1e-12,
         T=20e-9
     ):
+        # save settings
+        self.dt = dt
+        self.T = T
+
+        # instantiate CTLE and channel
         self.rx_ctle = RxCTLE(dt=dt, T=T)
         self.channel_data = ChannelData(dir_name=dir_name, dt=dt, T=T)
 
@@ -27,6 +31,14 @@ class RxDynamics:
     @property
     def n(self):
         return self.rx_ctle.n
+
+    @property
+    def setting_width(self):
+        return self.rx_ctle.setting_width
+
+    @property
+    def setting_padding(self):
+        return self.rx_ctle.setting_padding
 
     def get_imp(self, setting):
         # check if this impulse response has already been calculated
@@ -94,6 +106,14 @@ class RxCTLE:
     def n(self):
         return len(self.db_vals)
 
+    @property
+    def setting_width(self):
+        return int(ceil(log2(self.n)))
+
+    @property
+    def setting_padding(self):
+        return ((1 << self.setting_width) - self.n)
+
     def get_imp(self, setting):
         # check if this impulse response has already been calculated
         if setting in self._imps:
@@ -134,7 +154,7 @@ class RxCTLE:
 def main(dt=.1e-12, T=10e-9):
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
-    rx_dyn = RxDynamics()
+    rx_dyn = RxDynamics(dir_name='../channel/')
 
     import matplotlib.pyplot as plt
     plt.plot(rx_dyn.get_step(0).t, rx_dyn.get_step(0).v)
