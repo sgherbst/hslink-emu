@@ -13,7 +13,7 @@ module tx_clock #(
     output wire time_eq
 );
     // represent period
-    wire [TX_PERIOD_WIDTH-1:0] period = TX_PERIOD_VAL;
+    TX_PERIOD_FORMAT period = TX_PERIOD_VAL;
 
     // instantiate the clock
     clock #(

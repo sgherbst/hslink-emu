@@ -17,9 +17,15 @@ module tx_ffe (
     // instantiate the ROM
     wire [rom_addr_width-1:0] rom_addr;
     wire [FILTER_IN_WIDTH-1:0] rom_data;
-    myrom #(.addr_bits(rom_addr_width),
-            .data_bits(FILTER_IN_WIDTH),
-            .filename({ROM_DIR, "/", TX_FFE_ROM_NAME})) myrom_i(.addr(rom_addr), .dout(rom_data), .clk(clk));
+    my_rom_sync #(
+        .addr_bits(rom_addr_width),
+        .data_bits(FILTER_IN_WIDTH),
+        .filename({ROM_DIR, "/", TX_FFE_ROM_NAME})
+    ) myrom_i (
+        .addr(rom_addr),
+        .dout(rom_data),
+        .clk(clk)
+    );
 
     // store the input history
     reg [N_TAPS-2:0] in_hist;

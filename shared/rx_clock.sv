@@ -8,14 +8,14 @@ module rx_clock #(
     input wire clk,
     input wire rst,
     input TIME_FORMAT time_next,
-    input wire [DCO_CODE_WIDTH-1:0] code,
+    input DCO_CODE_FORMAT code,
     output TIME_FORMAT time_clock,
     output wire [1:0] cke_out,
     output wire time_eq
 );
     // offset and slope
-    wire [DCO_OFFSET_WIDTH-1:0] offset = DCO_OFFSET_VAL;
-    wire [DCO_SLOPE_WIDTH-1:0] slope = DCO_SLOPE_VAL;
+    DCO_OFFSET_FORMAT offset = DCO_OFFSET_VAL;
+    DCO_SLOPE_FORMAT slope = DCO_SLOPE_VAL;
 
     // compute linear correction
     wire [DCO_PROD_WIDTH-1:0] prod;
@@ -33,7 +33,8 @@ module rx_clock #(
     );
 
     // compute total period
-    wire [DCO_PERIOD_WIDTH-1:0] period = offset - prod;
+    DCO_PERIOD_FORMAT period;
+    assign period = offset - prod;
 
     // instantiate the clock
     clock #(

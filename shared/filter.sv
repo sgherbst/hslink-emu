@@ -34,26 +34,41 @@ module filter (
             if (k==0) begin
                 // value
                 assign value_hist[k] = in;
+
                 // time
-                mydff #(.N(DT_WIDTH)) time_dff_0(.in(time_next[DT_WIDTH-1:0]),
-                                                 .out(time_hist[0]),
-                                                 .cke(time_eq_in),
-                                                 .clk(clk),
-                                                 .rst(rst));
+                mydff #(
+                    .N(DT_WIDTH)
+                ) time_dff_0(
+                    .in(time_next[DT_WIDTH-1:0]),
+                    .out(time_hist[0]),
+                    .cke(time_eq_in),
+                    .clk(clk),
+                    .rst(rst)
+                );
             end else begin
                 // value
                 assign value_hist[k] = value_hist_reg[k];
-                mydff #(.N(FILTER_IN_WIDTH)) value_dff_k(.in(value_hist[k-1]),
-                                                         .out(value_hist_reg[k]),
-                                                         .cke(time_eq_in_d), 
-                                                         .clk(clk),
-                                                         .rst(rst));
+
+                mydff #(
+                    .N(FILTER_IN_WIDTH)
+                ) value_dff_k(
+                    .in(value_hist[k-1]),
+                    .out(value_hist_reg[k]),
+                    .cke(time_eq_in_d), 
+                    .clk(clk),
+                    .rst(rst)
+                );
+
                 // time
-                mydff #(.N(DT_WIDTH)) time_dff_k(.in(time_hist[k-1]),
-                                                 .out(time_hist[k]),
-                                                 .cke(time_eq_in),
-                                                 .clk(clk),
-                                                 .rst(rst));
+                mydff #(
+                    .N(DT_WIDTH)
+                ) time_dff_k (
+                    .in(time_hist[k-1]),
+                    .out(time_hist[k]),
+                    .cke(time_eq_in),
+                    .clk(clk),
+                    .rst(rst)
+                );
             end
         end
     endgenerate
@@ -71,25 +86,29 @@ module filter (
             assign pwl_in[k] = time_next - time_hist[k];
             
             // PWL instantiation
-            pwl #(.segment_rom_name(FILTER_SEGMENT_ROM_NAMES[k]),
-                  .bias_rom_name(FILTER_BIAS_ROM_NAMES[k]),
-                  .bias_width(FILTER_BIAS_WIDTHS[k]),
-                  .n_settings(NUM_RX_SETTINGS),
-                  .setting_width(RX_SETTING_WIDTH),
-                  .in_width(DT_WIDTH),
-                  .in_point(DT_POINT),
-                  .addr_width(FILTER_ADDR_WIDTHS[k]),
-                  .addr_offset(FILTER_ADDR_OFFSETS[k]),
-                  .segment_width(FILTER_SEGMENT_WIDTHS[k]),
-                  .offset_width(FILTER_OFFSET_WIDTHS[k]),
-                  .slope_width(FILTER_SLOPE_WIDTHS[k]),
-                  .slope_point(FILTER_SLOPE_POINTS[k]),
-                  .out_width(FILTER_STEP_WIDTH),
-                  .out_point(FILTER_STEP_POINT)) pwl_k (.in(pwl_in[k]), 
-                                                        .out(steps[k]),
-                                                        .setting(rx_setting),
-                                                        .clk(clk),
-                                                        .rst(rst));
+            pwl #(
+                .segment_rom_name(FILTER_SEGMENT_ROM_NAMES[k]),
+                .bias_rom_name(FILTER_BIAS_ROM_NAMES[k]),
+                .bias_width(FILTER_BIAS_WIDTHS[k]),
+                .n_settings(NUM_RX_SETTINGS),
+                .setting_width(RX_SETTING_WIDTH),
+                .in_width(DT_WIDTH),
+                .in_point(DT_POINT),
+                .addr_width(FILTER_ADDR_WIDTHS[k]),
+                .addr_offset(FILTER_ADDR_OFFSETS[k]),
+                .segment_width(FILTER_SEGMENT_WIDTHS[k]),
+                .offset_width(FILTER_OFFSET_WIDTHS[k]),
+                .slope_width(FILTER_SLOPE_WIDTHS[k]),
+                .slope_point(FILTER_SLOPE_POINTS[k]),
+                .out_width(FILTER_STEP_WIDTH),
+                .out_point(FILTER_STEP_POINT)
+            ) pwl_k (
+                .in(pwl_in[k]), 
+                .out(steps[k]),
+                .setting(rx_setting),
+                .clk(clk),
+                .rst(rst)
+            );
 
             // Pulse responses
             if (k == 0) begin
@@ -99,20 +118,28 @@ module filter (
             end
 
             // products
-            my_mult_signed #(.a_bits(FILTER_PULSE_WIDTH),
-                     .a_point(FILTER_PULSE_POINT),
-                     .b_bits(FILTER_IN_WIDTH),
-                     .b_point(FILTER_IN_POINT),
-                     .c_bits(FILTER_PROD_WIDTH),
-                     .c_point(FILTER_PROD_POINT)) prod_k (.a(pulses[k]),
-                                                          .b(value_hist[k]),
-                                                          .c(prods[k]));
+            my_mult_signed #(
+                .a_bits(FILTER_PULSE_WIDTH),
+                .a_point(FILTER_PULSE_POINT),
+                .b_bits(FILTER_IN_WIDTH),
+                .b_point(FILTER_IN_POINT),
+                .c_bits(FILTER_PROD_WIDTH),
+                .c_point(FILTER_PROD_POINT)
+            ) prod_k (
+                .a(pulses[k]),
+                .b(value_hist[k]),
+                .c(prods[k])
+            );
         end
     endgenerate
 
     // sum all of the terms together
-    mysum #(.in_bits(FILTER_PROD_WIDTH), 
-            .in_terms(NUM_UI), 
-            .out_bits(FILTER_OUT_WIDTH)) sum_i (.in(prods), 
-                                                .out(out));
+    mysum #(
+        .in_bits(FILTER_PROD_WIDTH), 
+        .in_terms(NUM_UI), 
+        .out_bits(FILTER_OUT_WIDTH)
+    ) sum_i (
+        .in(prods), 
+        .out(out)
+    );
 endmodule

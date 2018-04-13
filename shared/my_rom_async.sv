@@ -1,13 +1,12 @@
 `timescale 1ns/1ps
 
-module myrom #(
+module my_rom_async #(
     parameter addr_bits = 1,
     parameter data_bits = 1,
     parameter filename = "rom.mem"
 )(
     input wire [addr_bits-1:0] addr,
-    output reg [data_bits-1:0] dout,
-    input wire clk
+    output reg [data_bits-1:0] dout
 );
     localparam longint rom_length = longint'(1)<<longint'(addr_bits);
     
@@ -18,7 +17,7 @@ module myrom #(
     end
 
     // read from ROM
-    always @(posedge clk) begin
-        dout <= rom[addr];
+    always_comb begin
+        dout = rom[addr];
     end
 endmodule

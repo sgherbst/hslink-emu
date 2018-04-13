@@ -15,7 +15,7 @@ module dut #(
 )(
     input wire [RX_SETTING_WIDTH-1:0] rx_setting_ext,
     input wire [TX_SETTING_WIDTH-1:0] tx_setting_ext,
-    input wire [DCO_CODE_WIDTH-1:0] dco_init_ext,
+    input DCO_CODE_FORMAT dco_init_ext,
     input wire rst_ext,
     input wire SYSCLK_P,
     input wire SYSCLK_N,
@@ -42,7 +42,7 @@ module dut #(
     wire rst;
     wire [RX_SETTING_WIDTH-1:0] rx_setting;
     wire [TX_SETTING_WIDTH-1:0] tx_setting;
-    wire [DCO_CODE_WIDTH-1:0] dco_init;
+    DCO_CODE_FORMAT dco_init;
 
     // VIO
     generate
@@ -168,7 +168,7 @@ module dut #(
     );
 
     // Digital loop filter
-    wire [DCO_CODE_WIDTH-1:0] dco_code;
+    DCO_CODE_FORMAT dco_code;
     digital_lf #(
         .N(DCO_CODE_WIDTH),
         .Kp(KP_LF),
