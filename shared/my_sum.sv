@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-module mysum #(
+module my_sum #(
     parameter in_bits=1,
     parameter in_terms=1,
     parameter out_bits=1

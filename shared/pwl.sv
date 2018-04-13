@@ -4,27 +4,64 @@ import filter_package::*;
 import path_package::*;
 
 module pwl #(
+    // rom file name containing offsets and slopes,
+    // but not bias values for each setting; those
+    // are contained in another, smaller ROM
     parameter segment_rom_name = "rom.mem",
-    parameter bias_rom_name = "rom.mem",
-    parameter bias_width = 1,
-    parameter n_settings = 1,
-    parameter setting_width = 1,   
+
+    // number of settings contained represented
+    parameter setting_width = 1,
+
+    // input formatting      
     parameter in_width = 1,
     parameter in_point = 1,
+
+    // number of high bits taken from the
+    // input to form the ROM address
     parameter addr_width = 1,
-    parameter addr_offset = 1,
+
+    // offset subtracted from input to
+    // bias the start of the PWL table
+    parameter addr_offset = 1,     
+
+    // width of segment, i.e. the remaining 
+    // low bits after the high bits have
+    // been removed to address into the rom
     parameter segment_width = 1,
+
+    // bias formatting
+    // its point is taken to be out_point
+    parameter bias_width = 1,
+
+    // offset formatting
+    // its point is taken to be out_point
     parameter offset_width = 1,
+
+    // slope formatting
     parameter slope_width = 1,
     parameter slope_point = 1,
+
+    // output formatting
     parameter out_width = 1,
-    parameter out_point = 1
+    parameter out_point = 1,
+
+    //////////////////////////////////////
+    // needed only for multiple settings
+    parameter bias_rom_name = "rom.mem", 
+    //////////////////////////////////////
+        
+    //////////////////////////////////////
+    // needed only for single setting
+    parameter longint bias_val = 1
+    //////////////////////////////////////
 )(
     input [in_width-1:0] in,
     output signed [out_width-1:0] out,
-    input [setting_width-1:0] setting,
     input clk,
-    input rst
+    input rst,
+
+    // only used if setting_width > 0
+    input [setting_width-1:0] setting
 );
     // local parameters defined for convenience
     localparam segment_rom_addr_width = setting_width+addr_width;
@@ -32,7 +69,10 @@ module pwl #(
     localparam in_diff_width = segment_width+addr_width;
     localparam prod_width = segment_width + slope_width + 1; // extra bit added to account for making segment signed
     
-    // instantiate the segment rom
+    //////////////////////////////////////
+    // Segment ROM
+    //////////////////////////////////////
+
     wire [segment_rom_addr_width-1:0] segment_rom_addr;
     wire [segment_rom_data_width-1:0] segment_rom_data;
 
@@ -46,39 +86,62 @@ module pwl #(
         .clk(clk)
     );
 
-    // instantiate the bias rom
-    wire [bias_width-1:0] bias_rom_data;
+    // interpretation of memory contents as signed offset, slope, and bias
+    wire signed [offset_width-1:0] offset = $signed(segment_rom_data[offset_width+slope_width-1:slope_width]);
+    wire signed [slope_width-1:0] slope = $signed(segment_rom_data[slope_width-1:0]);
 
-    my_rom_sync #(
-        .addr_bits(setting_width),
-        .data_bits(bias_width),
-        .filename({ROM_DIR, "/", bias_rom_name})
-    ) bias_rom_i(
-        .addr(setting),
-        .dout(bias_rom_data),
-        .clk(clk)
-    );
+    //////////////////////////////////////
+    // Handling of one setting vs. multiple settings
+    //////////////////////////////////////
 
-    // calculate rom addr
+    // Subtract address offset from input
     wire [in_diff_width-1:0] in_diff = in - addr_offset;
-    assign segment_rom_addr = {setting, in_diff[in_diff_width-1:segment_width]};
+
+    wire signed [bias_width-1:0] bias;
+    generate
+        if (setting_width == 0) begin
+            // setting input is unused
+            assign segment_rom_addr = in_diff[in_diff_width-1:segment_width];
+
+            // bias is a parameter, so it is just assigned
+            // to the bias wire
+            assign bias = bias_val;
+        end else if (setting_width > 0) begin
+            // setting input is used
+            assign segment_rom_addr = {setting, in_diff[in_diff_width-1:segment_width]};
+
+            // bias is variable, read from ROM 
+            // depending on setting
+            wire [bias_width-1:0] bias_rom_data;
+            assign bias = $signed(bias_rom_data);
+        
+            // instantiate bias rom
+            my_rom_sync #(
+                .addr_bits(setting_width),
+                .data_bits(bias_width),
+                .filename({ROM_DIR, "/", bias_rom_name})
+            ) bias_rom_i(
+                .addr(setting),
+                .dout(bias_rom_data),
+                .clk(clk)
+            );
+        end else begin
+            $error("Invalid setting width.");
+        end
+    endgenerate
 
     // calculate length along segment
     // it is stored with a latency of one clock cycle
     // to match the rom latency
-    reg [segment_width-1:0] segment;
-    always @(posedge clk) begin
-        if (rst == 1'b1) begin
-            segment <= 0;
-        end else begin
-            segment <= in_diff[segment_width-1:0];
-        end
-    end
-
-    // interpretation of memory contents as signed offset, slope, and bias
-    wire signed [offset_width-1:0] offset = $signed(segment_rom_data[offset_width+slope_width-1:slope_width]);
-    wire signed [slope_width-1:0] slope = $signed(segment_rom_data[slope_width-1:0]);
-    wire signed [bias_width-1:0] bias = $signed(bias_rom_data);
+    wire [segment_width-1:0] segment;
+    my_dff #(
+        .n(segment_width)
+    ) my_dff_i (
+        .d(in_diff[segment_width-1:0]),
+        .q(segment),
+        .clk(clk),
+        .rst(rst)
+    );
 
     // compute linear correction
     wire signed [prod_width-1:0] prod;

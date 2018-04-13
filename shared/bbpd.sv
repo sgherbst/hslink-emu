@@ -6,7 +6,7 @@
 import signal_package::*;
 
 module bbpd (
-    input FILTER_OUT_FORMAT in,
+    input COMP_IN_FORMAT in,
     input clk_p, 
     input clk_n,
     input rst_p,
@@ -18,20 +18,19 @@ module bbpd (
 
     // sample data
     wire t;
-    comp comp_p(.in(in), .clk(clk_p), .rst(rst_p), .out(data));
-    comp comp_n(.in(in), .clk(clk_n), .rst(rst_n), .out(t));
+    comp_sync comp_p(.in(in), .clk(clk_p), .rst(rst_p), .out(data));
+    comp_sync comp_n(.in(in), .clk(clk_n), .rst(rst_n), .out(t));
 
     // logic used for output assignment
-    reg a, b;
-    always @(posedge clk_p) begin
-        if (rst_p == 1'b1) begin
-            a <= 1'b0;
-            b <= 1'b0;
-        end else begin
-            a <= data;
-            b <= t;
-        end
-    end
+    wire a, b;
+    my_dff #(
+        .n(2)
+    ) my_dff_i (
+        .d({data, t}),
+        .q({   a, b}),
+        .clk(clk_p),
+        .rst(rst_p)
+    );
 
     // output assignments
     assign up = a ^ b;

@@ -19,14 +19,13 @@ module filter (
     DT_FORMAT time_hist [NUM_UI];
     
     // generate delayed version of clock enable
-    reg time_eq_in_d;
-    always @(posedge clk) begin
-        if (rst == 1'b1) begin
-            time_eq_in_d <= 0;
-        end else begin
-            time_eq_in_d <= time_eq_in;
-        end
-    end
+    wire time_eq_in_d;
+    my_dff dff_time_eq (
+        .d(time_eq_in),
+        .q(time_eq_in_d),
+        .clk(clk),
+        .rst(rst)
+    );
     
     genvar k;
     generate
@@ -36,11 +35,11 @@ module filter (
                 assign value_hist[k] = in;
 
                 // time
-                mydff #(
-                    .N(DT_WIDTH)
+                my_dff_cke #(
+                    .n(DT_WIDTH)
                 ) time_dff_0(
-                    .in(time_next[DT_WIDTH-1:0]),
-                    .out(time_hist[0]),
+                    .d(time_next[DT_WIDTH-1:0]),
+                    .q(time_hist[0]),
                     .cke(time_eq_in),
                     .clk(clk),
                     .rst(rst)
@@ -49,22 +48,22 @@ module filter (
                 // value
                 assign value_hist[k] = value_hist_reg[k];
 
-                mydff #(
-                    .N(FILTER_IN_WIDTH)
+                my_dff_cke #(
+                    .n(FILTER_IN_WIDTH)
                 ) value_dff_k(
-                    .in(value_hist[k-1]),
-                    .out(value_hist_reg[k]),
+                    .d(value_hist[k-1]),
+                    .q(value_hist_reg[k]),
                     .cke(time_eq_in_d), 
                     .clk(clk),
                     .rst(rst)
                 );
 
                 // time
-                mydff #(
-                    .N(DT_WIDTH)
+                my_dff_cke #(
+                    .n(DT_WIDTH)
                 ) time_dff_k (
-                    .in(time_hist[k-1]),
-                    .out(time_hist[k]),
+                    .d(time_hist[k-1]),
+                    .q(time_hist[k]),
                     .cke(time_eq_in),
                     .clk(clk),
                     .rst(rst)
@@ -90,7 +89,6 @@ module filter (
                 .segment_rom_name(FILTER_SEGMENT_ROM_NAMES[k]),
                 .bias_rom_name(FILTER_BIAS_ROM_NAMES[k]),
                 .bias_width(FILTER_BIAS_WIDTHS[k]),
-                .n_settings(NUM_RX_SETTINGS),
                 .setting_width(RX_SETTING_WIDTH),
                 .in_width(DT_WIDTH),
                 .in_point(DT_POINT),
@@ -134,7 +132,7 @@ module filter (
     endgenerate
 
     // sum all of the terms together
-    mysum #(
+    my_sum #(
         .in_bits(FILTER_PROD_WIDTH), 
         .in_terms(NUM_UI), 
         .out_bits(FILTER_OUT_WIDTH)

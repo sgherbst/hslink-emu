@@ -361,7 +361,6 @@ class Emulation:
         pack.add_fixed_format(self.clk_rx.prod_fmt, 'DCO_PROD')
         pack.add(VerilogConstant(name='DCO_SLOPE_VAL', value=self.clk_rx.slope_int, kind='longint'))
         pack.add(VerilogConstant(name='DCO_OFFSET_VAL', value=self.clk_rx.offset_int, kind='longint'))
-        pack.add(VerilogConstant(name='DCO_CODE_INIT', value=self.clk_rx.code_init, kind='longint'))
 
         # Stopping time
         pack.add(VerilogConstant(name='TIME_STOP', value=self.time_fmt.intval(self.t_stop), kind='longint'))

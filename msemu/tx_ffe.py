@@ -13,7 +13,6 @@ class TxFFE:
             [-.1, .7, -.2],             # 7
             [-.125, .75, -.125],        # 8
             [-.167, .833, 0],           # 9
-            [1, 0, 0]                   # 10 (testing purposes)
         ]
 
         # build the array of different settings

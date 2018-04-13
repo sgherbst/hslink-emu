@@ -22,11 +22,12 @@ module time_manager #(
         end
     endgenerate
 
-    always @(posedge clk) begin
-        if (rst == 1'b1) begin 
-            time_curr <= 0;
-        end else begin
-            time_curr <= time_next;
-        end
-    end
+    my_dff #(
+        .n(TIME_WIDTH)
+    ) my_dff_i (
+        .d(time_next),
+        .q(time_curr),
+        .clk(clk),
+        .rst(rst)
+    );
 endmodule

@@ -28,14 +28,15 @@ module tx_ffe (
     );
 
     // store the input history
-    reg [N_TX_TAPS-2:0] in_hist;
-    always @(posedge clk) begin
-        if (rst == 1'b1) begin
-            in_hist <= 0;
-        end else begin
-            in_hist <= (in_hist << 1) | in;
-        end
-    end
+    wire [N_TX_TAPS-2:0] in_hist;
+    my_dff #(
+        .n(N_TX_TAPS-1)
+    ) my_dff_i (
+        .d((in_hist << 1) | in),
+        .q(in_hist),
+        .clk(clk),
+        .rst(rst)
+    );
 
     // set the ROM address
     assign rom_addr = {tx_setting, in_hist, in};

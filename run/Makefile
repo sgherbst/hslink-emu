@@ -11,7 +11,10 @@
 #########################################
 
 RX_SETTING = 0
-TX_SETTING = 10
+TX_SETTING = 4
+KP_LF = 256
+KI_LF = 1
+DCO_CODE_INIT = 7882
 
 #########################################
 # settings for testing specific features
@@ -73,6 +76,9 @@ SIM_LIBS = $(addprefix -y ,$(SIM_LIB_LIST))
 # defines
 SIM_DEF_LIST += RX_SETTING=$(RX_SETTING)
 SIM_DEF_LIST += TX_SETTING=$(TX_SETTING)
+SIM_DEF_LIST += KP_LF=$(KP_LF)
+SIM_DEF_LIST += KI_LF=$(KI_LF)
+SIM_DEF_LIST += DCO_CODE_INIT=$(DCO_CODE_INIT)
 SIM_DEFS = $(addprefix +define+,$(SIM_DEF_LIST))
 
 # add other options

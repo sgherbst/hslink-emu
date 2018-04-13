@@ -1,22 +1,22 @@
 `timescale 1ns/1ps
 
-module mydff #(
-    parameter N=1,
+module my_dff_cke #(
+    parameter n=1,
     parameter init=0
 ) (
-    input wire [N-1:0] in,
+    input wire [n-1:0] d,
+    output reg [n-1:0] q,
     input wire clk,
     input wire rst,
-    input wire cke,
-    output reg [N-1:0] out = 0
+    input wire cke
 );
     always @(posedge clk) begin
         if (rst == 1'b1) begin
-            out <= init;
+            q <= init;
         end else if (cke == 1'b1) begin
-            out <= in;
+            q <= d;
         end else begin
-            out <= out;
+            q <= q;
         end
     end
 endmodule

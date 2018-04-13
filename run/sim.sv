@@ -4,12 +4,26 @@ import tx_package::*;
 import filter_package::*;
 import time_package::*;
 
+// Default settings for Vivado
+
 `ifndef RX_SETTING
     `define RX_SETTING 'd0
 `endif
 
 `ifndef TX_SETTING
     `define TX_SETTING 'd10
+`endif
+
+`ifndef DCO_CODE_INIT
+    `define DCO_CODE_INIT 'd7882
+`endif
+
+`ifndef KP_LF
+    `define KP_LF 'd256
+`endif
+
+`ifndef KI_LF
+    `define KI_LF 'd1
 `endif
 
 `ifndef USE_ADC
@@ -19,9 +33,13 @@ import time_package::*;
 module tb;
     wire [RX_SETTING_WIDTH-1:0] rx_setting = `RX_SETTING;
     wire [TX_SETTING_WIDTH-1:0] tx_setting = `TX_SETTING;
-    wire [DCO_CODE_WIDTH-1:0] dco_init = DCO_CODE_INIT;
+    wire [DCO_CODE_WIDTH-1:0] dco_init = `DCO_CODE_INIT;
+    wire signed [DCO_CODE_WIDTH-1:0] kp_lf = `KP_LF;
+    wire signed [DCO_CODE_WIDTH-1:0] ki_lf = `KI_LF;
 
-    wire sim_done;
+    wire TIME_FORMAT time_trig = TIME_STOP;
+    wire time_flag;
+
     reg SYSCLK_P = 1'b0;
     reg SYSCLK_N = 1'b1;
 
@@ -48,15 +66,18 @@ module tb;
     ) dut_i(
         .SYSCLK_P(SYSCLK_P),    
         .SYSCLK_N(SYSCLK_N),
-        .sim_done(sim_done),
         .rst_ext(rst),
         .rx_setting_ext(rx_setting),
         .tx_setting_ext(tx_setting),
-        .dco_init_ext(dco_init)
+        .dco_init_ext(dco_init),
+        .kp_lf_ext(kp_lf),
+        .ki_lf_ext(ki_lf),
+        .time_trig_ext(time_trig),
+        .time_flag(time_flag)
     );
 
-    always @(sim_done) begin
-        if (sim_done == 1'b1) begin
+    always @(time_flag) begin
+        if (time_flag == 1'b1) begin
             $finish;
         end
     end
