@@ -116,6 +116,7 @@ class Emulation:
 
         # create verilog packages
         self.tx_ffe_rom_name = 'tx_ffe_rom' + '.' + self.rom_ext
+        self.rx_dfe_rom_name = 'rx_dfe_rom' + '.' + self.rom_ext
         self.create_packages()
 
         # write output
@@ -288,6 +289,10 @@ class Emulation:
         self.tx_ffe.write_table(file_name=os.path.join(self.rom_dir, self.tx_ffe_rom_name),
                                 fixed_format=self.in_fmt)
 
+    def write_rx_dfe_rom_file(self):
+        self.dfe.write_table(file_name=os.path.join(self.rom_dir, self.rx_dfe_rom_name),
+                                fixed_format=self.dfe_out_fmt)
+
     def create_filter_package(self, name='filter_package'):
         pack = VerilogPackage(name=name)
 
@@ -387,6 +392,7 @@ class Emulation:
         pack.add_fixed_format(self.dfe_out_fmt, 'DFE_OUT')
         pack.add_fixed_format(self.comp_in_fmt, 'COMP_IN')
         pack.add(VerilogConstant(name='N_DFE_TAPS', value=self.n_dfe_taps, kind='int'))
+        pack.add(VerilogConstant(name='RX_DFE_ROM_NAME', value=self.rx_dfe_rom_name, kind='string'))
 
         self.rx_package = pack
 
@@ -422,6 +428,7 @@ class Emulation:
     def write_rom_files(self):
         self.write_filter_rom_files()
         self.write_tx_ffe_rom_file()
+        self.write_rx_dfe_rom_file()
 
     def write_formats(self):
         fmt_dict = {

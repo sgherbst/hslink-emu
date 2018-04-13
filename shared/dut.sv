@@ -4,6 +4,7 @@ import time_package::*;
 import signal_package::*;
 import filter_package::*;
 import tx_package::*;
+import rx_package::*;
 
 module dut #(
     parameter USE_VIO=1,
@@ -116,6 +117,7 @@ module dut #(
 
     // Representation of TX and RX data signals
     (* mark_debug = "true" *) wire out_tx;
+    (* mark_debug = "true" *) wire out_rx;
     (* mark_debug = "true" *) FILTER_IN_FORMAT sig_tx;
     (* mark_debug = "true" *) FILTER_OUT_FORMAT filter_out;
     
@@ -159,15 +161,18 @@ module dut #(
     // Add DFE correction
     DFE_OUT_FORMAT dfe_out;
     COMP_IN_FORMAT comp_in;
-    dfe dfe_i(
+    rx_dfe rx_dfe_i(
         .in(out_rx),
         .clk(clk_rx_p),
-        .rst(rst_rx_p)
+        .rst(rst_rx_p),
+        .tx_setting(tx_setting),
+        .rx_setting(rx_setting),
+        .out(dfe_out)
     );
     assign comp_in = filter_out + dfe_out;
 
     // Bang-band phase detector
-    wire out_rx, up, dn;
+    wire up, dn;
     bbpd bbpd_i(
         .in(comp_in),
         .clk_p(clk_rx_p),
