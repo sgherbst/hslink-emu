@@ -12,6 +12,7 @@ from msemu.tx_ffe import TxFFE
 from msemu.cmd import get_parser, mkdir_p
 from msemu.lfsr import LFSR
 from msemu.clocks import TxClock, RxClock
+from msemu.dfe import DFE
 
 class ErrorBudget:
     # all errors are normalized to a particular value:
@@ -46,6 +47,7 @@ class Emulation:
         jitter_pkpk_rx = 10e-12,       # peak-to-peak jitter of RX
         t_res = 1e-14,                 # smallest time resolution represented
         t_trunc = 10e-9,               # time at which step response is truncated
+        n_dfe_taps = 2,                # number of dfe taps
         build_dir = '../build/',       # where packages are stored
         channel_dir = '../channel/',   # where channel data are stored
         data_dir = '../data/',         # where ADC data are stored
@@ -64,6 +66,7 @@ class Emulation:
         self.jitter_pkpk_rx = jitter_pkpk_rx
         self.t_res = t_res
         self.t_trunc = t_trunc
+        self.n_dfe_taps = n_dfe_taps
 
         # store file output settings
         self.build_dir = os.path.abspath(build_dir)
@@ -107,6 +110,9 @@ class Emulation:
 
         # Set the widths of several signals
         self.set_filter_widths()
+
+        # Set formatting associated with DFE
+        self.set_dfe_formats()
 
         # create verilog packages
         self.tx_ffe_rom_name = 'tx_ffe_rom' + '.' + self.rom_ext
@@ -177,6 +183,32 @@ class Emulation:
         logging.debug('Pulse range: {} to {}'.format(self.pulse_fmt.min_float, self.pulse_fmt.max_float))
         logging.debug('Product range: {} to {}'.format(self.prod_fmt.min_float, self.prod_fmt.max_float))
         logging.debug('Output range: {} to {}'.format(self.out_fmt.min_float, self.out_fmt.max_float))
+
+    def set_dfe_formats(self):
+        # create DFE object
+        ui = 1/self.f_tx_nom
+        self.dfe = DFE(tx_ffe=self.tx_ffe,
+                       rx_dyn=self.rx_dyn,
+                       ui=ui,
+                       n_taps=self.n_dfe_taps)
+
+        # compute DFE tap representations
+        dfe_out_fmts = []
+        for tx_setting in range(self.tx_ffe.n_settings):
+            for rx_setting in range(self.rx_dyn.n):
+                setting = self.dfe.settings[tx_setting][rx_setting]
+
+                point_fmt = self.out_fmt.point_fmt
+                width_fmt = WidthFormat.make(point_fmt.intval(setting), signed=True)
+
+                dfe_out_fmts.append(Fixed(point_fmt=point_fmt,
+                                          width_fmt=width_fmt))
+
+        # define DFE format to cover all values that need to be represented
+        self.dfe_out_fmt = Fixed.cover(dfe_out_fmts)
+
+        # define comparator input format
+        self.comp_in_fmt = self.out_fmt + self.dfe_out_fmt
 
     def set_num_ui(self):
         # Determine number of UIs required to ensure the full step response is covered
@@ -342,12 +374,21 @@ class Emulation:
     def create_tx_package(self, name='tx_package'):
         pack = VerilogPackage(name=name)
 
-        pack.add(VerilogConstant(name='N_SETTINGS', value=self.tx_ffe.n_settings, kind='int'))
+        pack.add(VerilogConstant(name='N_TX_SETTINGS', value=self.tx_ffe.n_settings, kind='int'))
         pack.add(VerilogConstant(name='TX_SETTING_WIDTH', value=self.tx_ffe.setting_width, kind='int'))
-        pack.add(VerilogConstant(name='N_TAPS', value=self.tx_ffe.n_taps, kind='int'))
+        pack.add(VerilogConstant(name='N_TX_TAPS', value=self.tx_ffe.n_taps, kind='int'))
         pack.add(VerilogConstant(name='TX_FFE_ROM_NAME', value=self.tx_ffe_rom_name, kind='string'))
 
         self.tx_package = pack
+
+    def create_rx_package(self, name='rx_package'):
+        pack = VerilogPackage(name=name)
+
+        pack.add_fixed_format(self.dfe_out_fmt, 'DFE_OUT')
+        pack.add_fixed_format(self.comp_in_fmt, 'COMP_IN')
+        pack.add(VerilogConstant(name='N_DFE_TAPS', value=self.n_dfe_taps, kind='int'))
+
+        self.rx_package = pack
 
     def create_path_package(self, name='path_package'):
         pack = VerilogPackage(name=name)
@@ -367,6 +408,7 @@ class Emulation:
         self.create_tx_package()
         self.create_path_package()
         self.create_lfsr_package()
+        self.create_rx_package()
 
     def write_packages(self):
         self.filter_package.write(self.build_dir)
@@ -375,6 +417,7 @@ class Emulation:
         self.tx_package.write(self.build_dir)
         self.path_package.write(self.build_dir)
         self.lfsr_package.write(self.build_dir)
+        self.rx_package.write(self.build_dir)
 
     def write_rom_files(self):
         self.write_filter_rom_files()
