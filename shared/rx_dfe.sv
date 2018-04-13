@@ -1,45 +1,46 @@
 `timescale 1ns/1ps
 
-module rx_dfe #(
-    parameter N=1,
-    parameter real coeffs [0:N-1] = {1.0},
-    parameter sig_bits=1,
-    parameter sig_res_bits=1
-)(
-    input signed [sig_bits-1:0] in,
-    input data,
+import path_package::*;
+import tx_package::*;
+import rx_package::*;
+import filter_package::*;
+
+module rx_dfe (
+    input in,
     input clk,
-    output wire signed [sig_bits-1:0] out
+    input rst,
+    input [TX_SETTING_WIDTH-1:0] tx_setting,
+    input [RX_SETTING_WIDTH-1:0] rx_setting,
+    output DFE_OUT_FORMAT out
 );
-    // verilog idiosyncracy needed to initialize hist array
-    localparam signed [sig_bits-1:0] hist_zero=0;   
+    localparam rom_addr_width = TX_SETTING_WIDTH + RX_SETTING_WIDTH + N_DFE_TAPS;
 
-    wire signed [sig_bits-1:0] weights [0:N-1];
-    genvar k;
-    generate
-        for (k=0; k<N; k=k+1) begin : weight_gen_block
-            assign weights[k] = (data==1'b1) ? longint'(real'(coeffs[k])*(real'(2)**real'(sig_res_bits))) : longint'(real'(-coeffs[k])*(real'(2)**real'(sig_res_bits)));
-        end            
-        if (N==1) begin : out_assign_n_eq_1
-            assign out = in + weights[0];
-        end else if (N>1) begin : out_assign_n_gt_1
-            // history declaration and initialization
-            reg signed [sig_bits-1:0] hist[0:N-2] = '{(N-1){hist_zero}};
+    // instantiate the ROM
+    wire [rom_addr_width-1:0] rom_addr;
+    wire [DFE_OUT_WIDTH-1:0] rom_data;
+    my_rom_async #(
+        .addr_bits(rom_addr_width),
+        .data_bits(DFE_OUT_WIDTH),
+        .filename({ROM_DIR, "/", RX_DFE_ROM_NAME})
+    ) myrom_i (
+        .addr(rom_addr),
+        .dout(rom_data)
+    );
 
-            // filter state update
-            for (k=0; k<N-2; k=k+1) begin
-                always @(posedge clk) begin
-                    hist[k] <= hist[k+1] + weights[k+1];
-                end
-            end
-            always @(posedge clk) begin
-                hist[N-2] <= weights[N-1];
-            end
-
-            // output assignment
-            assign out = in + weights[0] + hist[0];
-        end else begin : out_assign_err_condition
-            $error("Only N>=1 supported.");
+    // store the input history
+    reg [N_DFE_TAPS-2:0] in_hist;
+    always @(posedge clk) begin
+        if (rst == 1'b1) begin
+            in_hist <= 0;
+        end else begin
+            in_hist <= (in_hist << 1) | in;
         end
-    endgenerate 
+    end
+
+    // set the ROM address
+    assign rom_addr = {tx_setting, rx_setting, in_hist, in};
+
+    // write the output
+    assign out = $signed(rom_data & {DFE_OUT_WIDTH{~rst}});
+
 endmodule

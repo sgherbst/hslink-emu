@@ -12,7 +12,7 @@ module tx_ffe (
     output FILTER_IN_FORMAT out,
     input [TX_SETTING_WIDTH-1:0] tx_setting
 );
-    localparam rom_addr_width = TX_SETTING_WIDTH + N_TAPS;
+    localparam rom_addr_width = TX_SETTING_WIDTH + N_TX_TAPS;
 
     // instantiate the ROM
     wire [rom_addr_width-1:0] rom_addr;
@@ -28,7 +28,7 @@ module tx_ffe (
     );
 
     // store the input history
-    reg [N_TAPS-2:0] in_hist;
+    reg [N_TX_TAPS-2:0] in_hist;
     always @(posedge clk) begin
         if (rst == 1'b1) begin
             in_hist <= 0;

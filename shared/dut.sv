@@ -117,7 +117,7 @@ module dut #(
     // Representation of TX and RX data signals
     (* mark_debug = "true" *) wire out_tx;
     (* mark_debug = "true" *) FILTER_IN_FORMAT sig_tx;
-    (* mark_debug = "true" *) FILTER_OUT_FORMAT sig_rx;
+    (* mark_debug = "true" *) FILTER_OUT_FORMAT filter_out;
     
     // Create TX clock
     tx_clock tx_clk_i(
@@ -149,19 +149,31 @@ module dut #(
     filter filter_i(
         .in(sig_tx),
         .time_eq_in(time_eq_tx),
-        .out(sig_rx),
+        .out(filter_out),
         .time_next(time_next),
         .rx_setting(rx_setting),
         .clk(clk_sys),
         .rst(rst_sys)
     );
 
+    // Add DFE correction
+    DFE_OUT_FORMAT dfe_out;
+    COMP_IN_FORMAT comp_in;
+    dfe dfe_i(
+        .in(out_rx),
+        .clk(clk_rx_p),
+        .rst(rst_rx_p)
+    );
+    assign comp_in = filter_out + dfe_out;
+
     // Bang-band phase detector
     wire out_rx, up, dn;
     bbpd bbpd_i(
-        .in(sig_rx),
-        .clk(clk_rx_p),
-        .clkb(clk_rx_n),
+        .in(comp_in),
+        .clk_p(clk_rx_p),
+        .rst_p(rst_rx_p),
+        .clk_n(clk_rx_n),
+        .rst_n(rst_rx_n),
         .data(out_rx),
         .up(up),
         .dn(dn)
@@ -239,7 +251,7 @@ module dut #(
             ) adc_rx_p (
                 .clk(clk_rx_p),
                 .time_curr(time_curr),
-                .sig(sig_rx)
+                .sig(filter_out)
             );
           
             // RX falling edge signal monitor                              
@@ -250,7 +262,7 @@ module dut #(
             ) adc_rx_n (
                 .clk(clk_rx_n),
                 .time_curr(time_curr),
-                .sig(sig_rx)
+                .sig(filter_out)
             );
         end
     endgenerate
