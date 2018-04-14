@@ -54,7 +54,7 @@ module top;
         clk = 1'b0;
 
         // loop over times
-        for (longint i=0; i < max_time; i = i+100) begin
+        for (longint i=0; i < max_time; i = i+1) begin
             t = i + longint'(FILTER_ADDR_OFFSETS[k]);
             #5;
             clk = 1'b1;
