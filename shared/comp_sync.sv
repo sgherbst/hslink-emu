@@ -1,6 +1,7 @@
 `timescale 1ns/1ps
 
 import signal_package::*;
+import rx_package::*;
 
 module comp_sync (
     input COMP_IN_FORMAT in,

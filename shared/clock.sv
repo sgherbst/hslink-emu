@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-import time_package::TIME_FORMAT;
+import time_package::*;
 
 module clock #(
     parameter integer N = 1,

@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-import time_package::TIME_FORMAT;
+import time_package::*;
 
 module tx_clock #(
     parameter lfsr_init = 2

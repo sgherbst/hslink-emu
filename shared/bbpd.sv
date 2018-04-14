@@ -4,6 +4,7 @@
 `timescale 1ns/1ps
 
 import signal_package::*;
+import rx_package::*;
 
 module bbpd (
     input COMP_IN_FORMAT in,

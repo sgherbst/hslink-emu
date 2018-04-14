@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-import time_package::TIME_FORMAT;
+import time_package::*;
 
 module time_manager #(
     parameter N=1,

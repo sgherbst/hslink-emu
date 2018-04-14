@@ -28,7 +28,7 @@ module tb;
 
     reg rst = 1'b1;
     initial begin
-        #1000;
+        #3000;
         rst = 1'b0;
     end
 
@@ -46,7 +46,7 @@ module tb;
     // RX CTLE setting
 
     `ifndef RX_SETTING
-        `define RX_SETTING 'd0
+        `define RX_SETTING 'd4
     `endif
 
     wire [RX_SETTING_WIDTH-1:0] rx_setting = `RX_SETTING;
@@ -54,7 +54,7 @@ module tb;
     // TX FFE setting
 
     `ifndef TX_SETTING
-        `define TX_SETTING 'd10
+        `define TX_SETTING 'd4
     `endif
 
     wire [TX_SETTING_WIDTH-1:0] tx_setting = `TX_SETTING;
@@ -62,7 +62,7 @@ module tb;
     // Initial DCO code
 
     `ifndef DCO_CODE_INIT
-        `define DCO_CODE_INIT 'd7882
+        `define DCO_CODE_INIT 'd6700
     `endif
 
     wire [DCO_CODE_WIDTH-1:0] dco_init = `DCO_CODE_INIT;
@@ -86,7 +86,7 @@ module tb;
     // Scale factor on jitter of TX clock
 
     `ifndef JITTER_SCALE_TX
-        `define JITTER_SCALE_TX 'd0
+        `define JITTER_SCALE_TX 'd700
     `endif
 
     TX_JITTER_SCALE_FORMAT jitter_scale_tx = `JITTER_SCALE_TX;
@@ -94,7 +94,7 @@ module tb;
     // Scale factor on jitter of RX clock
 
     `ifndef JITTER_SCALE_RX
-        `define JITTER_SCALE_RX 'd0
+        `define JITTER_SCALE_RX 'd700
     `endif
 
     RX_JITTER_SCALE_FORMAT jitter_scale_rx = `JITTER_SCALE_RX;
@@ -105,22 +105,13 @@ module tb;
     // debug cores.
 
     `ifndef TIME_TRIG
-        `define TIME_TRIG 2814750
+        // `define TIME_TRIG 18014398 // 128 ns
+        `define TIME_TRIG 288230376 // 2.048 us
     `endif
     wire TIME_FORMAT time_trig = `TIME_TRIG;
 
-    // If USE_ADC == 1, ADCs are instantiated and certain
-    // nodes are probed.  This option should be disabled
-    // when profiling CPU simulation or synthesizing 
-    // for the FPGA.
-    
-    `ifndef USE_ADC
-        `define USE_ADC 0
-    `endif
-
     dut #(
-        .USE_VIO(0),
-        .USE_ADC(`USE_ADC)
+        .USE_VIO(0)
     ) dut_i (
         // differential clock
         .SYSCLK_P(SYSCLK_P),    

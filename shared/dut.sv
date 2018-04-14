@@ -7,8 +7,7 @@ import tx_package::*;
 import rx_package::*;
 
 module dut #(
-    parameter USE_VIO=1,
-    parameter USE_ADC=0
+    parameter USE_VIO=1
 )(
     input wire SYSCLK_P,
     input wire SYSCLK_N,
@@ -29,34 +28,57 @@ module dut #(
     // Debug signals
     //////////////////////
 
-    // tx
-    (* mark_debug = "true" *) wire rst_tx;
-    (* mark_debug = "true" *) TIME_FORMAT time_curr_tx;
-    (* mark_debug = "true" *) wire out_tx;
-    (* mark_debug = "true" *) FILTER_IN_FORMAT filter_in;
-    (* mark_debug = "true" *) wire time_flag_tx;
+    // Debug: TX
+    wire clk_tx;
+    wire rst_tx;
+    TIME_FORMAT time_curr;
+    wire out_tx;
+    FILTER_IN_FORMAT filter_in;
+    ila_0 ila_0_i(
+        .clk(clk_tx),
+        .probe0(rst_tx),
+        .probe1(time_curr),
+        .probe2(out_tx),
+        .probe3(filter_in),
+        .probe4(time_flag)
+    );
 
-    // rx_p
-    (* mark_debug = "true" *) wire rst_rx_p; 
-    (* mark_debug = "true" *) TIME_FORMAT time_curr_rx_p;
-    (* mark_debug = "true" *) wire out_rx;
-    (* mark_debug = "true" *) FILTER_OUT_FORMAT filter_out_p;
-    (* mark_debug = "true" *) DFE_OUT_FORMAT dfe_out;
-    (* mark_debug = "true" *) COMP_IN_FORMAT comp_in;
-    (* mark_debug = "true" *) DCO_CODE_FORMAT dco_code;
-    (* mark_debug = "true" *) wire time_flag_rx_p;
+    // Debug: RX P
+    wire clk_rx_p;
+    wire rst_rx_p; 
+    wire out_rx;
+    FILTER_OUT_FORMAT filter_out;
+    DFE_OUT_FORMAT dfe_out;
+    COMP_IN_FORMAT comp_in;
+    DCO_CODE_FORMAT dco_code;
+    ila_1 ila_1_i(
+        .clk(clk_rx_p),
+        .probe0(rst_rx_p),
+        .probe1(time_curr),
+        .probe2(out_rx),
+        .probe3(filter_out),
+        .probe4(dfe_out),
+        .probe5(comp_in),
+        .probe6(dco_code),
+        .probe7(time_flag)
+    );
 
-    // rx_n
-    (* mark_debug = "true" *) wire rst_rx_n;
-    (* mark_debug = "true" *) TIME_FORMAT time_curr_rx_n;
-    (* mark_debug = "true" *) FILTER_OUT_FORMAT filter_out_n;
-    (* mark_debug = "true" *) wire time_flag_rx_n;
+    // Debug: RX N
+    wire clk_rx_n;
+    wire rst_rx_n;
+    ila_2 ila_2_i (
+        .clk(clk_rx_n),
+        .probe0(rst_rx_n),
+        .probe1(time_curr),
+        .probe2(filter_out),
+        .probe3(time_flag)
+    );
 
     // Clock generation code
     wire cke_tx;
     wire cke_rx_p;
     wire cke_rx_n;
-    wire clk_sys, clk_tx, clk_rx_p, clk_rx_n;
+    wire clk_sys;
     clkgen clkgen_i(
         .SYSCLK_P(SYSCLK_P),
         .SYSCLK_N(SYSCLK_N), 
@@ -152,10 +174,6 @@ module dut #(
     );
 
     // Filter data stream according to channel + CTLE dynamics
-    FILTER_OUT_FORMAT filter_out;
-    assign filter_out_n = filter_out; // debug visibility
-    assign filter_out_p = filter_out; // debug visibility
-
     filter filter_i(
         .in(filter_in),
         .time_eq_in(time_eq_tx),
@@ -217,11 +235,6 @@ module dut #(
     );
 
     // Create time manager
-    TIME_FORMAT time_curr;
-    assign time_curr_tx = time_curr;   // debug visibility 
-    assign time_curr_rx_p = time_curr; // debug visibility  
-    assign time_curr_rx_n = time_curr; // debug visibility
-
     time_manager #(
         .N(2)
     ) tm (
@@ -233,10 +246,6 @@ module dut #(
     );
 
     // Monitor time
-    assign time_flag_tx   = time_flag; // debug visibility
-    assign time_flag_rx_p = time_flag; // debug visibility
-    assign time_flag_rx_n = time_flag; // debug visibility
-
     always @(posedge clk_sys) begin
         if (rst == 1'b1) begin
             time_flag <= 1'b0;
@@ -247,17 +256,4 @@ module dut #(
         end
     end
 
-    // conditional instantiation of ADCs
-    generate
-        if (USE_ADC == 1) begin
-            adc_gen adc_gen_i(
-                .clk_tx(clk_tx),
-                .clk_rx_p(clk_rx_p),
-                .clk_rx_n(clk_rx_n),
-                .time_curr(time_curr),
-                .filter_in(filter_in),
-                .filter_out(filter_out)
-            );
-        end
-    endgenerate
 endmodule
