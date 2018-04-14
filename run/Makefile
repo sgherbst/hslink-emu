@@ -148,7 +148,7 @@ sim_profile:
 #########################
 
 sim_filter:
-	$(SIM_CMD) $(SIM_OPTS) $(SIM_DEBUG_OPTS) +define+PULSE_INDEX=$(PULSE_INDEX) sim_filter.sv
+	$(SIM_CMD) $(SIM_OPTS) $(SIM_DEBUG_OPTS) +define+FILTER_PWL_INDEX=$(FILTER_PWL_INDEX) sim_filter.sv
 
 sim_dco:
 	$(SIM_CMD) $(SIM_OPTS) $(SIM_DEBUG_OPTS) sim_dco.sv

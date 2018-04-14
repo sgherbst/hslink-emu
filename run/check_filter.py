@@ -7,11 +7,10 @@ from scipy.stats import describe
 from math import floor
 import os.path
 import sys
-import argparse
 
-from msemu.ctle import RxCTLE
-from msemu.rf import get_sample_s4p, s4p_to_impulse
+from msemu.ctle import RxDynamics
 from msemu.pwl import Waveform
+from msemu.cmd import get_parser
 
 class SimResult:
     def __init__(self, pwl, ideal):
@@ -21,7 +20,7 @@ class SimResult:
 def get_combined_step(rx_setting):
     return RxCTLE().get_combined_step(rx_setting)
 
-def eval(rx_setting):
+def eval(rx_dyn, rx_setting):
     # read data
     data = genfromtxt('filter_pwl_emu.txt', delimiter=',')
     t_pwl = data[:, 0]
@@ -29,7 +28,7 @@ def eval(rx_setting):
     pwl = Waveform(t=t_pwl, v=v_pwl)
 
     # get ideal response
-    ideal = get_combined_step(rx_setting)
+    ideal = rx_dyn.get_step(rx_setting)
 
     # return waveforms
     return SimResult(
@@ -62,11 +61,14 @@ def plot(result):
     plt.show()
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = get_parser()
     parser.add_argument('--rx_setting', type=int, help='Setting of the RX CTLE.')
     args = parser.parse_args()
 
-    result = eval(args.rx_setting)
+    # create the RxDynamics object
+    rx_dyn = RxDynamics(dir_name=args.channel_dir)
+
+    result = eval(rx_dyn=rx_dyn, rx_setting=args.rx_setting)
 
     measure_error(result)
     plot(result)
