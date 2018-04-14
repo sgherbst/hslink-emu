@@ -43,8 +43,8 @@ class Emulation:
         f_rx_max = 8.5e9,              # maximum RX frequency
         f_tx_nom = 8e9,                # nominal TX frequency
         dco_bits = 14,                 # number of DCO bits
-        jitter_pkpk_tx = 10e-12,       # peak-to-peak jitter of TX
-        jitter_pkpk_rx = 10e-12,       # peak-to-peak jitter of RX
+        jitter_pkpk_tx = 2e-12,       # peak-to-peak jitter of TX
+        jitter_pkpk_rx = 2e-12,       # peak-to-peak jitter of RX
         t_res = 1e-14,                 # smallest time resolution represented
         t_trunc = 10e-9,                # time at which step response is truncated
         n_dfe_taps = 2,                # number of dfe taps
@@ -359,9 +359,6 @@ class Emulation:
         pack.add_fixed_format(self.clk_rx.jitter_fmt, 'RX_JITTER')
         pack.add_fixed_format(self.clk_rx.period_fmt, 'DCO_PERIOD')
         pack.add_fixed_format(self.clk_rx.code_fmt, 'DCO_CODE')
-
-        # Stopping time
-        pack.add(VerilogConstant(name='TIME_MAX', value=self.time_fmt.intval(self.t_max), kind='longint'))
 
         self.time_package = pack
 

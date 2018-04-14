@@ -14,7 +14,8 @@ RX_SETTING = 0
 TX_SETTING = 4
 KP_LF = 256
 KI_LF = 1
-DCO_CODE_INIT = 7882
+DCO_CODE_INIT = 8192
+TIME_TRIG = 2814750
 
 #########################################
 # settings for testing specific features
@@ -56,7 +57,7 @@ GIT = git
 #########################################
 # simulation options
 #########################################
-SIM_CMD = irun
+SIM_CMD = xrun
 
 # packages
 SIM_PACK_LIST += time_package.sv
@@ -79,6 +80,7 @@ SIM_DEF_LIST += TX_SETTING=$(TX_SETTING)
 SIM_DEF_LIST += KP_LF=$(KP_LF)
 SIM_DEF_LIST += KI_LF=$(KI_LF)
 SIM_DEF_LIST += DCO_CODE_INIT=$(DCO_CODE_INIT)
+SIM_DEF_LIST += TIME_TRIG=$(TIME_TRIG)
 SIM_DEFS = $(addprefix +define+,$(SIM_DEF_LIST))
 
 # add other options
@@ -88,16 +90,20 @@ SIM_OPTS += $(SIM_LIBS)
 SIM_OPTS += +libext+.sv
 SIM_OPTS += -timescale 1ns/1ps
 SIM_OPTS += -sv
-SIM_OPTS += +nc64bit 
+SIM_OPTS += +xm64bit
 
 # options for specific scenarios
 
-# standard simulation (slow but more visibility)
+# standard simulation (slowest but most visibility)
 SIM_DEBUG_OPTS += -input sim.tcl
 SIM_DEBUG_OPTS += -access +rwc
 SIM_DEBUG_OPTS += +define+USE_ADC=1
 
-# profile simulation (fast but no visibility)
+# lean simulation (faster with less visibility)
+SIM_LEAN_OPTS += -input lean.tcl
+SIM_LEAN_OPTS += -access +r
+
+# profile simulation (fastest but no visibility)
 SIM_PROFILE_OPTS += -input profile.tcl
 SIM_PROFILE_OPTS += -profile
 
@@ -121,18 +127,31 @@ check_ila:
 check_filter:
 	$(PYTHON) check_filter.py $(PYTHON_OPTS) --rx_setting $(RX_SETTING)
 
+check_dco:
+	$(PYTHON) check_dco.py $(PYTHON_OPTS) 
+
 #########################
-# sim commands
+# full system sim commands
 #########################
 
 sim:
 	$(SIM_CMD) $(SIM_OPTS) $(SIM_DEBUG_OPTS) sim.sv
 
-sim_filter:
-	$(SIM_CMD) $(SIM_OPTS) $(SIM_DEBUG_OPTS) +define+PULSE_INDEX=$(PULSE_INDEX) sim_filter.sv
+sim_lean:
+	$(SIM_CMD) $(SIM_OPTS) $(SIM_LEAN_OPTS) sim.sv
 
 sim_profile:
 	$(SIM_CMD) $(SIM_OPTS) $(SIM_PROFILE_OPTS) sim.sv
+
+#########################
+# subsystem sim commands
+#########################
+
+sim_filter:
+	$(SIM_CMD) $(SIM_OPTS) $(SIM_DEBUG_OPTS) +define+PULSE_INDEX=$(PULSE_INDEX) sim_filter.sv
+
+sim_dco:
+	$(SIM_CMD) $(SIM_OPTS) $(SIM_DEBUG_OPTS) sim_dco.sv
 
 #########################
 # cleaning commands
