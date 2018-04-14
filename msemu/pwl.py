@@ -144,8 +144,14 @@ class Waveform:
         assert len(v)==self.n
         self.v = v
 
-        # get time spacing
-        self.dt = Waveform.get_dt(self.t)
+        # placeholder for memoized value
+        self._dt = None
+
+    @property
+    def dt(self):
+        if self._dt is None:
+            self._dt = Waveform.get_dt(self.t)
+        return self._dt
 
     def trim(self, n):
         assert n <= self.n
@@ -156,6 +162,15 @@ class Waveform:
         assert self.t[idx] >= t0
 
         return Waveform(t=self.t[idx:], v=self.v[idx:])
+
+    def save(self, file_name):
+        arr = np.column_stack((self.t, self.v))
+        np.save(file_name, arr)
+
+    @staticmethod
+    def load(file_name):
+        arr = np.load(file_name)
+        return Waveform(t=arr[:, 0], v=arr[:, 1])
 
     @staticmethod
     def get_dt(t):

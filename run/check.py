@@ -25,21 +25,6 @@ class IdealResult:
         self.in_ = in_
         self.out = out
 
-def get_ila_data(ila_data):
-    # get data formats
-
-
-
-    tx_file = os.path.join(data_dir, 'ila', 'large_step', 'ila_0_data.csv')
-    rx_p_file = os.path.join(data_dir, 'ila', 'large_step', 'ila_1_data.csv')
-    rx_n_file = os.path.join(data_dir, 'ila', 'large_step', 'ila_2_data.csv')
-
-    tx = read_ila_tx(tx_file, in_fmt=in_fmt, time_fmt=time_fmt)
-    rxp = read_ila_rx_p(rx_p_file, out_fmt=out_fmt, time_fmt=time_fmt)
-    rxn = read_ila_rx_n(rx_n_file, out_fmt=out_fmt, time_fmt=time_fmt)
-
-    return Data(tx=tx, rxp=rxp, rxn=rxn)
-
 def get_sim_data(data_dir):
     # determine file names
     tx_file_name = os.path.join(data_dir, 'tx.txt')

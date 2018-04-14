@@ -135,6 +135,12 @@ check:
 check_ila:
 	$(PYTHON) check.py $(PYTHON_OPTS) --rx_setting $(RX_SETTING) --use_ila
 
+ila_sweep_write:
+	$(PYTHON) process_ila_sweep.py $(PYTHON_OPTS) --write
+
+ila_sweep_read:
+	$(PYTHON) process_ila_sweep.py $(PYTHON_OPTS) --read
+
 check_ila_loopback:
 	$(PYTHON) check_ila_loopback.py $(PYTHON_OPTS) 
 
