@@ -10,14 +10,19 @@
 # only one is exercised in simulation
 #########################################
 
-RX_SETTING = 0
+RX_SETTING = 4
 TX_SETTING = 4
 KP_LF = 256
 KI_LF = 1
-DCO_CODE_INIT = 7500
+DCO_CODE_INIT = 6700
 JITTER_SCALE_RX = 700
 JITTER_SCALE_TX = 700
-TIME_TRIG = 2814750
+
+# 128 ns
+TIME_TRIG = 18014398
+
+# 2.048 us
+# TIME_TRIG = 288230376
 
 #########################################
 # settings for testing specific features
@@ -102,7 +107,6 @@ SIM_OPTS += +xm64bit
 # standard simulation (slowest but most visibility)
 SIM_DEBUG_OPTS += -input sim.tcl
 SIM_DEBUG_OPTS += -access +rwc
-SIM_DEBUG_OPTS += +define+USE_ADC=1
 
 # lean simulation (faster with less visibility)
 SIM_LEAN_OPTS += -input lean.tcl
