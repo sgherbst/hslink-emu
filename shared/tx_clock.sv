@@ -20,6 +20,7 @@ module tx_clock #(
         .N(1),
         .PERIOD_WIDTH(TX_PERIOD_WIDTH),
         .JITTER_WIDTH(TX_JITTER_WIDTH),
+        .UPDATE_WIDTH(TX_UPDATE_WIDTH),
         .lfsr_init(lfsr_init)
     ) clock_i(
         .clk(clk), 

@@ -14,10 +14,9 @@ module rx_clock #(
     output wire [1:0] cke_out,
     output wire time_eq
 );
-    // compute total period
-    DCO_PERIOD_FORMAT period;
-
     // PWL instantiation
+    RX_DCO_OUT_FORMAT rx_dco_pwl_out; // this is signed...
+
     pwl #(
         // note: setting_width=0 to indicate there
         // are not multiple settings
@@ -40,11 +39,11 @@ module rx_clock #(
         .offset_width(RX_DCO_OFFSET_WIDTH),
         .slope_width(RX_DCO_SLOPE_WIDTH),
         .slope_point(RX_DCO_SLOPE_POINT),
-        .out_width(DCO_PERIOD_WIDTH),
-        .out_point(DCO_PERIOD_POINT)
+        .out_width(RX_DCO_OUT_WIDTH),
+        .out_point(RX_DCO_OUT_POINT)
     ) dco_pwl (
         .in(code), 
-        .out(period),
+        .out(rx_dco_pwl_out),
         .clk(clk),
         .rst(rst),
         // setting input is not used, but SystemVerilog
@@ -55,11 +54,16 @@ module rx_clock #(
         .setting(2'b00)
     );
 
+    // the period is the unsigned version of the PWL output
+    DCO_PERIOD_FORMAT period;
+    assign period = rx_dco_pwl_out[DCO_PERIOD_WIDTH-1:0];
+
     // instantiate the clock
     clock #(
         .N(2),
         .PERIOD_WIDTH(DCO_PERIOD_WIDTH),
         .JITTER_WIDTH(RX_JITTER_WIDTH),
+        .UPDATE_WIDTH(RX_UPDATE_WIDTH),
         .lfsr_init(lfsr_init)
     ) clock_i(.clk(clk), 
         .rst(rst),

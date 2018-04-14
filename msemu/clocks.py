@@ -12,23 +12,16 @@ from msemu.fixed import Fixed, PointFormat, WidthFormat
 from msemu.pwl import Waveform, PwlTable
 
 class JitterFormat(Fixed):
-    def __init__(self, jitter_pkpk, time_fmt):
+    def __init__(self, jitter_pkpk_max, time_fmt):
         # compute jitter format
         # it is set up so that the min and max values are the absolute min and max possible in the representation,
         # since a PRBS will be used to generate them
-        jitter_min_int = time_fmt.point_fmt.intval(0, floor)
-        jitter_max_int = time_fmt.point_fmt.intval(jitter_pkpk, ceil)
-        jitter_width = max(WidthFormat.width([jitter_min_int, jitter_max_int], signed=False))
+        jitter_min_int = time_fmt.point_fmt.intval(-jitter_pkpk_max/2, floor)
+        jitter_max_int = time_fmt.point_fmt.intval(+jitter_pkpk_max/2, ceil)
+        jitter_width = max(WidthFormat.width([jitter_min_int, jitter_max_int], signed=True))
+
         super().__init__(point_fmt=time_fmt.point_fmt,
-                         width_fmt=WidthFormat(jitter_width, signed=False))
-
-    @property
-    def mid_int(self):
-        return (self.min_int+self.max_int)//2
-
-    @property
-    def mid_float(self):
-        return self.mid_int * self.res
+                         width_fmt=WidthFormat(jitter_width, signed=True))
 
 class Clock:
     def __init__(self, period_fmt, jitter_fmt):
@@ -37,59 +30,54 @@ class Clock:
         self.jitter_fmt = jitter_fmt
 
         # compute output format
-        self.out_fmt = self.period_fmt + self.jitter_fmt
+        self.update_fmt = (self.period_fmt.to_signed() + self.jitter_fmt).to_unsigned()
 
         # make sure that period is always positive
-        assert self.out_fmt.min_int > 0
+        assert self.update_fmt.min_int > 0
 
 class TxClock(Clock):
-    def __init__(self, freq, jitter_pkpk, time_fmt):
+    def __init__(self, freq, jitter_pkpk_max, time_fmt):
         # determine jitter format
-        jitter_fmt = JitterFormat(jitter_pkpk=jitter_pkpk, time_fmt=time_fmt)
+        jitter_fmt = JitterFormat(jitter_pkpk_max=jitter_pkpk_max, time_fmt=time_fmt)
 
         # compute period format
-        self.T_nom_int = time_fmt.intval(1/freq) - jitter_fmt.mid_int
+        self.T_nom_int = time_fmt.intval(1/freq) 
         period_fmt = Fixed(point_fmt=time_fmt.point_fmt,
                            width_fmt=WidthFormat.make(self.T_nom_int, signed=False))
 
         super().__init__(period_fmt=period_fmt, jitter_fmt=jitter_fmt)
 
 class RxClock(Clock):
-    def __init__(self, fmin, fmax, bits, jitter_pkpk, time_fmt, phases=2):
+    def __init__(self, fmin, fmax, bits, jitter_pkpk_max, time_fmt, phases=2):
         # store settings
         self.fmin = fmin
         self.fmax = fmax
         self.phases = phases
 
         # determine jitter format
-        jitter_fmt = JitterFormat(jitter_pkpk=jitter_pkpk/self.phases, time_fmt=time_fmt)
+        jitter_fmt = JitterFormat(jitter_pkpk_max=jitter_pkpk_max/self.phases, time_fmt=time_fmt)
 
         # determine DCO code format
         self.code_fmt = Fixed(point_fmt=PointFormat(0),
                               width_fmt=WidthFormat(n=bits, signed=False))
 
         # create DCO transfer function
-        self.create_dco_tf(bias=jitter_fmt.mid_float)
+        self.create_dco_tf()
 
         # create PWL table to represent transfer function
         self.pwl_table = self.get_pwl_table(time_point_fmt = time_fmt.point_fmt)
+
+        # determine the period format
+        period_fmt = self.pwl_table.out_fmt.to_unsigned()
         
-        # determine period format
-        period_fmt = self.pwl_table.out_fmt.to_unsigned() + jitter_fmt
+        super().__init__(period_fmt=period_fmt,
+                         jitter_fmt=jitter_fmt)
 
-        super().__init__(period_fmt=period_fmt, jitter_fmt=jitter_fmt)
-
-    def create_dco_tf(self, bias=0):
+    def create_dco_tf(self):
         # generate the DCO transfer function
         codes = np.arange(self.code_fmt.max_int+2) # one extra code is included for purposes of generating the PWL table
         freqs = self.fmin + (self.fmax-self.fmin)*codes/(self.code_fmt.max_int)
         periods = 1/(self.phases*freqs)
-
-        ##########################################
-        # bias periods by average jitter
-        # TODO: fix this using signed jitter!
-        periods -= bias
-        ##########################################
 
         # check period validity
         assert np.all(periods > 0)
@@ -133,12 +121,12 @@ class RxClock(Clock):
 def main():
     time_fmt = Fixed.make([0, 10e-6], res=1e-14, signed=False)
     
-    tx_clk = TxClock(freq=8e9, jitter_pkpk=10e-12, time_fmt=time_fmt)
+    tx_clk = TxClock(freq=8e9, jitter_pkpk_max=10e-12, time_fmt=time_fmt)
     print('tx jitter:', str(tx_clk.jitter_fmt))
     print('tx period:', str(tx_clk.period_fmt))
     print()
 
-    rx_clk = RxClock(fmin=7.5e9, fmax=8.5e9, bits=14, jitter_pkpk=10e-12, time_fmt=time_fmt)
+    rx_clk = RxClock(fmin=7.5e9, fmax=8.5e9, bits=14, jitter_pkpk_max=10e-12, time_fmt=time_fmt)
     print('rx jitter:', str(rx_clk.jitter_fmt))
     print('rx period:', str(rx_clk.period_fmt))
     print('rx code:', str(rx_clk.code_fmt))

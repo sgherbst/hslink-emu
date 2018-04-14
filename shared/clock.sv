@@ -6,6 +6,7 @@ module clock #(
     parameter integer N = 1,
     parameter integer PERIOD_WIDTH = 1,
     parameter integer JITTER_WIDTH = 1,
+    parameter integer UPDATE_WIDTH = 1,
     parameter lfsr_init = 1
 )(
     input wire clk,
@@ -20,7 +21,7 @@ module clock #(
     assign time_eq = (time_next == time_clock) ? 1'b1 : 1'b0;
 
     // lfsr for jitter
-    wire [JITTER_WIDTH-1:0] jitter;
+    wire [JITTER_WIDTH-1:0] lfsr_state;
     lfsr_cke #(
         .n(JITTER_WIDTH),
         .init(lfsr_init)
@@ -28,12 +29,25 @@ module clock #(
         .clk(clk),
         .cke(time_eq),
         .rst(rst),
-        .state(jitter)
+        .state(lfsr_state)
     );
 
-    // clock period progression logic
+    // jitter is the signed interpretation of the LFSR output
+    wire signed [JITTER_WIDTH-1:0] jitter;
+    assign jitter = $signed(lfsr_state);
+
+    // compute the time increment, including jitter
+    // it's signed although the top bit should never be set
+    wire signed [UPDATE_WIDTH:0] time_update_signed;
+    assign time_update_signed = $signed({1'b0, period}) + jitter;
+
+    // trim off the sign bit to get the unsigned time update
+    wire [UPDATE_WIDTH-1:0] time_update;
+    assign time_update = time_update_signed[UPDATE_WIDTH-1:0];
+
+    // update the clock time
     TIME_FORMAT time_clock_next;
-    assign time_clock_next = time_clock + period + jitter;
+    assign time_clock_next = time_clock + time_update;
     my_dff_cke #(
         .n(TIME_WIDTH)
     ) time_prog_dff (

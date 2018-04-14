@@ -43,10 +43,10 @@ class Emulation:
         f_rx_max = 8.5e9,              # maximum RX frequency
         f_tx_nom = 8e9,                # nominal TX frequency
         dco_bits = 14,                 # number of DCO bits
-        jitter_pkpk_tx = 2e-12,       # peak-to-peak jitter of TX
-        jitter_pkpk_rx = 2e-12,       # peak-to-peak jitter of RX
+        jitter_tx_max = 10e-12,        # max jitter of TX (peak-to-peak)
+        jitter_rx_max = 10e-12,        # max jitter of RX (peak-to-peak)
         t_res = 1e-14,                 # smallest time resolution represented
-        t_trunc = 10e-9,                # time at which step response is truncated
+        t_trunc = 10e-9,               # time at which step response is truncated
         n_dfe_taps = 2,                # number of dfe taps
         build_dir = '../build/',       # where packages are stored
         channel_dir = '../channel/',   # where channel data are stored
@@ -61,8 +61,8 @@ class Emulation:
         self.f_rx_max = f_rx_max
         self.f_tx_nom = f_tx_nom
         self.dco_bits = dco_bits
-        self.jitter_pkpk_tx = jitter_pkpk_tx
-        self.jitter_pkpk_rx = jitter_pkpk_rx
+        self.jitter_tx_max = jitter_tx_max
+        self.jitter_rx_max = jitter_rx_max
         self.t_res = t_res
         self.t_trunc = t_trunc
         self.n_dfe_taps = n_dfe_taps
@@ -129,8 +129,8 @@ class Emulation:
         self.time_fmt = Fixed.make([0, self.t_max], self.t_res, signed=False)
 
     def create_clocks(self):
-        self.clk_tx = TxClock(freq=self.f_tx_nom, jitter_pkpk=self.jitter_pkpk_tx, time_fmt=self.time_fmt)
-        self.clk_rx = RxClock(fmin=self.f_rx_min, fmax=self.f_rx_max, bits=self.dco_bits, jitter_pkpk=self.jitter_pkpk_rx, time_fmt=self.time_fmt)
+        self.clk_tx = TxClock(freq=self.f_tx_nom, jitter_pkpk_max=self.jitter_tx_max, time_fmt=self.time_fmt)
+        self.clk_rx = RxClock(fmin=self.f_rx_min, fmax=self.f_rx_max, bits=self.dco_bits, jitter_pkpk_max=self.jitter_rx_max, time_fmt=self.time_fmt)
 
     def set_in_format(self):
         self.tx_ffe = TxFFE()
@@ -213,14 +213,14 @@ class Emulation:
 
     def set_num_ui(self):
         # Determine number of UIs required to ensure the full step response is covered
-        self.num_ui = int(ceil(self.t_trunc / self.clk_tx.out_fmt.min_float)) + 1
-        assert (self.num_ui-1)*self.clk_tx.out_fmt.min_float >= self.t_trunc
-        assert (self.num_ui-2)*self.clk_tx.out_fmt.min_float < self.t_trunc
+        self.num_ui = int(ceil(self.t_trunc / self.clk_tx.update_fmt.min_float)) + 1
+        assert (self.num_ui-1)*self.clk_tx.update_fmt.min_float >= self.t_trunc
+        assert (self.num_ui-2)*self.clk_tx.update_fmt.min_float < self.t_trunc
 
         logging.debug('Number of UIs: {}'.format(self.num_ui))
 
         # Set the format for the time history in the filter
-        dt_max_int = self.num_ui * self.clk_tx.out_fmt.max_int
+        dt_max_int = self.num_ui * self.clk_tx.update_fmt.max_int
         self.dt_fmt = Fixed(point_fmt=self.time_fmt.point_fmt,
                             width_fmt=WidthFormat.make([0, dt_max_int], signed=False))
 
@@ -240,8 +240,8 @@ class Emulation:
 
     def create_filter_pwl_table(self, k, addr_bits_max=18):
         # compute range of times at which PWL table will be evaluated
-        dt_start_int = k*self.clk_tx.out_fmt.min_int
-        dt_stop_int = (k+1)*self.clk_tx.out_fmt.max_int
+        dt_start_int = k*self.clk_tx.update_fmt.min_int
+        dt_stop_int = (k+1)*self.clk_tx.update_fmt.max_int
 
         # compute number of bits going into the PWL, after subtracting off dt_start_int
         pwl_time_bits = WidthFormat.width(dt_stop_int - dt_start_int, signed=False)
@@ -353,11 +353,13 @@ class Emulation:
         # TX clock
         pack.add_fixed_format(self.clk_tx.jitter_fmt, 'TX_JITTER')
         pack.add_fixed_format(self.clk_tx.period_fmt, 'TX_PERIOD')
+        pack.add_fixed_format(self.clk_tx.update_fmt, 'TX_UPDATE')
         pack.add(VerilogConstant(name='TX_PERIOD_VAL', value=self.clk_tx.T_nom_int, kind='longint'))
 
         # RX clock
         pack.add_fixed_format(self.clk_rx.jitter_fmt, 'RX_JITTER')
         pack.add_fixed_format(self.clk_rx.period_fmt, 'DCO_PERIOD')
+        pack.add_fixed_format(self.clk_rx.update_fmt, 'RX_UPDATE')
         pack.add_fixed_format(self.clk_rx.code_fmt, 'DCO_CODE')
 
         self.time_package = pack
@@ -392,6 +394,7 @@ class Emulation:
         pack.add(VerilogConstant(name='RX_DCO_ROM_NAME', value=self.rx_dco_rom_name, kind='string'))
 
         dco_pwl_table = self.clk_rx.pwl_table
+        pack.add_fixed_format(dco_pwl_table.out_fmt, 'RX_DCO_OUT')
         pack.add(VerilogConstant(name='RX_DCO_BIAS_VAL', value=dco_pwl_table.bias_ints[0], kind='longint'))
         pack.add(VerilogConstant(name='RX_DCO_ADDR_WIDTH', value=dco_pwl_table.high_bits_fmt.n, kind='int'))
         pack.add(VerilogConstant(name='RX_DCO_SEGMENT_WIDTH', value=dco_pwl_table.low_bits_fmt.n, kind='int'))
