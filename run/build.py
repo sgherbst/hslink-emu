@@ -13,6 +13,7 @@ from msemu.cmd import get_parser, mkdir_p
 from msemu.lfsr import LFSR
 from msemu.clocks import TxClock, RxClock
 from msemu.dfe import DFE
+from msemu.pwl import PwlTable
 
 class ErrorBudget:
     # all errors are normalized to a particular value:
@@ -37,16 +38,15 @@ class Emulation:
     def __init__(
         self,
         err,                           # error budget
-        t_stop = 20e-9,                # stopping time of emulation
+        t_max = 10e-3,                 # maximum time that can be represented in emulation
         f_rx_min = 7.5e9,              # minimum RX frequency
         f_rx_max = 8.5e9,              # maximum RX frequency
-        f_rx_init = 7.95e9,            # initial RX frequency
         f_tx_nom = 8e9,                # nominal TX frequency
         dco_bits = 14,                 # number of DCO bits
         jitter_pkpk_tx = 10e-12,       # peak-to-peak jitter of TX
         jitter_pkpk_rx = 10e-12,       # peak-to-peak jitter of RX
         t_res = 1e-14,                 # smallest time resolution represented
-        t_trunc = 10e-9,               # time at which step response is truncated
+        t_trunc = 10e-9,                # time at which step response is truncated
         n_dfe_taps = 2,                # number of dfe taps
         build_dir = '../build/',       # where packages are stored
         channel_dir = '../channel/',   # where channel data are stored
@@ -56,10 +56,9 @@ class Emulation:
     ):
         # save emulation settings
         self.err = err
-        self.t_stop = t_stop
+        self.t_max = t_max
         self.f_rx_min = f_rx_min
         self.f_rx_max = f_rx_max
-        self.f_rx_init = f_rx_init
         self.f_tx_nom = f_tx_nom
         self.dco_bits = dco_bits
         self.jitter_pkpk_tx = jitter_pkpk_tx
@@ -117,6 +116,7 @@ class Emulation:
         # create verilog packages
         self.tx_ffe_rom_name = 'tx_ffe_rom' + '.' + self.rom_ext
         self.rx_dfe_rom_name = 'rx_dfe_rom' + '.' + self.rom_ext
+        self.rx_dco_rom_name = 'rx_dco_rom' + '.' + self.rom_ext
         self.create_packages()
 
         # write output
@@ -126,11 +126,11 @@ class Emulation:
 
     def set_time_format(self):
         # the following are full formats, with associated widths
-        self.time_fmt = Fixed.make([0, self.t_stop], self.t_res, signed=False)
+        self.time_fmt = Fixed.make([0, self.t_max], self.t_res, signed=False)
 
     def create_clocks(self):
         self.clk_tx = TxClock(freq=self.f_tx_nom, jitter_pkpk=self.jitter_pkpk_tx, time_fmt=self.time_fmt)
-        self.clk_rx = RxClock(finit=self.f_rx_init, fmin=self.f_rx_min, fmax=self.f_rx_max, bits=self.dco_bits, jitter_pkpk=self.jitter_pkpk_rx, time_fmt=self.time_fmt)
+        self.clk_rx = RxClock(fmin=self.f_rx_min, fmax=self.f_rx_max, bits=self.dco_bits, jitter_pkpk=self.jitter_pkpk_rx, time_fmt=self.time_fmt)
 
     def set_in_format(self):
         self.tx_ffe = TxFFE()
@@ -293,6 +293,9 @@ class Emulation:
         self.dfe.write_table(file_name=os.path.join(self.rom_dir, self.rx_dfe_rom_name),
                                 fixed_format=self.dfe_out_fmt)
 
+    def write_rx_dco_rom_file(self):
+        self.clk_rx.pwl_table.write_segment_table(os.path.join(self.rom_dir, self.rx_dco_rom_name))
+
     def create_filter_package(self, name='filter_package'):
         pack = VerilogPackage(name=name)
 
@@ -356,14 +359,9 @@ class Emulation:
         pack.add_fixed_format(self.clk_rx.jitter_fmt, 'RX_JITTER')
         pack.add_fixed_format(self.clk_rx.period_fmt, 'DCO_PERIOD')
         pack.add_fixed_format(self.clk_rx.code_fmt, 'DCO_CODE')
-        pack.add_fixed_format(self.clk_rx.offset_fmt, 'DCO_OFFSET')
-        pack.add_fixed_format(self.clk_rx.slope_fmt, 'DCO_SLOPE')
-        pack.add_fixed_format(self.clk_rx.prod_fmt, 'DCO_PROD')
-        pack.add(VerilogConstant(name='DCO_SLOPE_VAL', value=self.clk_rx.slope_int, kind='longint'))
-        pack.add(VerilogConstant(name='DCO_OFFSET_VAL', value=self.clk_rx.offset_int, kind='longint'))
 
         # Stopping time
-        pack.add(VerilogConstant(name='TIME_STOP', value=self.time_fmt.intval(self.t_stop), kind='longint'))
+        pack.add(VerilogConstant(name='TIME_MAX', value=self.time_fmt.intval(self.t_max), kind='longint'))
 
         self.time_package = pack
 
@@ -392,6 +390,18 @@ class Emulation:
         pack.add_fixed_format(self.comp_in_fmt, 'COMP_IN')
         pack.add(VerilogConstant(name='N_DFE_TAPS', value=self.n_dfe_taps, kind='int'))
         pack.add(VerilogConstant(name='RX_DFE_ROM_NAME', value=self.rx_dfe_rom_name, kind='string'))
+
+        # DCO PWL-specific definitions
+        pack.add(VerilogConstant(name='RX_DCO_ROM_NAME', value=self.rx_dco_rom_name, kind='string'))
+
+        dco_pwl_table = self.clk_rx.pwl_table
+        pack.add(VerilogConstant(name='RX_DCO_BIAS_VAL', value=dco_pwl_table.bias_ints[0], kind='longint'))
+        pack.add(VerilogConstant(name='RX_DCO_ADDR_WIDTH', value=dco_pwl_table.high_bits_fmt.n, kind='int'))
+        pack.add(VerilogConstant(name='RX_DCO_SEGMENT_WIDTH', value=dco_pwl_table.low_bits_fmt.n, kind='int'))
+        pack.add(VerilogConstant(name='RX_DCO_OFFSET_WIDTH', value=dco_pwl_table.offset_fmt.n, kind='int'))
+        pack.add(VerilogConstant(name='RX_DCO_BIAS_WIDTH', value=dco_pwl_table.bias_fmt.n, kind='int'))
+        pack.add(VerilogConstant(name='RX_DCO_SLOPE_WIDTH', value=dco_pwl_table.slope_fmt.n, kind='int'))
+        pack.add(VerilogConstant(name='RX_DCO_SLOPE_POINT', value=dco_pwl_table.slope_fmt.point, kind='int'))
 
         self.rx_package = pack
 
@@ -428,6 +438,7 @@ class Emulation:
         self.write_filter_rom_files()
         self.write_tx_ffe_rom_file()
         self.write_rx_dfe_rom_file()
+        self.write_rx_dco_rom_file()
 
     def write_formats(self):
         fmt_dict = {
@@ -439,111 +450,6 @@ class Emulation:
         fmt_dict_file = os.path.join(self.build_dir, 'fmt_dict.json')
         with open(fmt_dict_file, 'w') as f:
             f.write(fmt_dict_str)
-
-class PwlTable:
-    def __init__(self, pwls, high_bits_fmt, low_bits_fmt, addr_offset_int, offset_point_fmt, slope_point_fmt):
-        # save settings
-        self.pwls = pwls
-        self.high_bits_fmt = high_bits_fmt
-        self.low_bits_fmt = low_bits_fmt
-        self.addr_offset_int = addr_offset_int
-        self.offset_point_fmt = offset_point_fmt
-        self.slope_point_fmt = slope_point_fmt
-
-        # check input validity
-        assert all(np.isclose(pwl.dtau, self.high_bits_fmt.res) for pwl in self.pwls)
-
-        # set up the format of the ROM
-        self.set_rom_fmt()
-
-    @property
-    def n_segments(self):
-        n_segments_0 = self.pwls[0].n
-        assert all(pwl.n == n_segments_0 for pwl in self.pwls)
-        return n_segments_0
-
-    @property
-    def n_settings(self):
-        return len(self.pwls)
-
-    @property
-    def setting_bits(self):
-        return int(ceil(log2(self.n_settings)))
-
-    @property
-    def setting_padding(self):
-        return ((1<<self.setting_bits)-self.n_settings)
-
-    def set_rom_fmt(self):
-        # determine the bias
-        bias_floats = [(min(pwl.offsets)+max(pwl.offsets))/2 for pwl in self.pwls]
-        self.bias_ints = self.offset_point_fmt.intval(bias_floats)
-        bias_fmts = [Fixed(point_fmt=self.offset_point_fmt,
-                           width_fmt=WidthFormat.make(bias_int, signed=True))
-                     for bias_int in self.bias_ints]
-        self.bias_fmt = Fixed.cover(bias_fmts)
-
-        # determine offset representation
-        offset_floats = [[offset - bias_float for offset in pwl.offsets]
-                         for pwl, bias_float in zip(self.pwls, bias_floats)]
-        self.offset_ints = [self.offset_point_fmt.intval(setting)
-                            for setting in offset_floats]
-        offset_fmts = [[Fixed(point_fmt=self.offset_point_fmt,
-                              width_fmt=WidthFormat.make(offset_int, signed=True))
-                        for offset_int in setting]
-                       for setting in self.offset_ints]
-        self.offset_fmt = Fixed.cover(Fixed.cover(setting) for setting in offset_fmts)
-
-        # determine slope representation
-        self.slope_ints = [self.slope_point_fmt.intval(pwl.slopes)
-                           for pwl in self.pwls]
-        slope_fmts = [[Fixed(point_fmt=self.slope_point_fmt,
-                             width_fmt=WidthFormat.make(slope_int, signed=True))
-                       for slope_int in setting]
-                      for setting in self.slope_ints]
-        self.slope_fmt = Fixed.cover(Fixed.cover(setting) for setting in slope_fmts)
-
-        # determine output representation of output
-        out_fmts = []
-
-        for setting in range(self.n_settings):
-            for offset_fmt, slope_fmt in zip(offset_fmts[setting],
-                                             slope_fmts[setting]):
-                out_fmts.append(bias_fmts[setting]
-                                + offset_fmt
-                                + (slope_fmt * self.low_bits_fmt.to_signed()).align_to(self.offset_point_fmt.point))
-
-        self.out_fmt = Fixed.cover(out_fmts)
-
-    def write_segment_table(self, fname):
-        with open(fname, 'w') as f:
-            # write the segment tables for each setting one after another
-            for offset_setting, slope_setting in zip(self.offset_ints, self.slope_ints):
-                offset_strs = self.offset_fmt.width_fmt.bin_str(offset_setting)
-                slope_strs = self.slope_fmt.width_fmt.bin_str(slope_setting)
-                for offset_str, slope_str in zip(offset_strs, slope_strs):
-                    f.write(offset_str+slope_str+'\n')
-
-            # pad the end with zeros as necessary
-            zero_str = '0'*(self.offset_fmt.n+self.slope_fmt.n)
-            for i in range(self.setting_padding):
-                for j in range(self.n_segments):
-                    f.write(zero_str+'\n')
-
-    def write_bias_table(self, fname):
-        with open(fname, 'w') as f:
-            # write the bias values into a table
-            for bias_str in self.bias_fmt.width_fmt.bin_str(self.bias_ints):
-                f.write(bias_str + '\n')
-
-            # pad the end with zeros as necessary
-            zero_str = '0'*self.bias_fmt.n
-            for i in range(self.setting_padding):
-                f.write(zero_str+'\n')
-
-    @property
-    def table_size_bits(self):
-        return self.n_settings * self.n_segments * (self.offset_fmt.n + self.slope_fmt.n)
 
 def main(plot_dt=1e-12):
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)

@@ -9,6 +9,7 @@ import collections
 import json
 
 from msemu.fixed import Fixed, PointFormat, WidthFormat
+from msemu.pwl import Waveform, PwlTable
 
 class JitterFormat(Fixed):
     def __init__(self, jitter_pkpk, time_fmt):
@@ -54,9 +55,10 @@ class TxClock(Clock):
         super().__init__(period_fmt=period_fmt, jitter_fmt=jitter_fmt)
 
 class RxClock(Clock):
-    def __init__(self, finit, fmin, fmax, bits, jitter_pkpk, time_fmt, phases=2):
+    def __init__(self, fmin, fmax, bits, jitter_pkpk, time_fmt, phases=2):
         # store settings
-        self.finit = finit
+        self.fmin = fmin
+        self.fmax = fmax
         self.phases = phases
 
         # determine jitter format
@@ -66,41 +68,67 @@ class RxClock(Clock):
         self.code_fmt = Fixed(point_fmt=PointFormat(0),
                               width_fmt=WidthFormat(n=bits, signed=False))
 
-        # determine the slope
-        t_min_no_jitter = 1/(self.phases*fmax)
-        t_max_no_jitter = 1/(self.phases*fmin)
-        self.slope_float = (t_max_no_jitter - t_min_no_jitter)/self.code_fmt.max_float
-        assert self.slope_float > 0
+        # create DCO transfer function
+        self.create_dco_tf(bias=jitter_fmt.mid_float)
 
-        # determine slope representation
-        slope_res = 0.5*self.slope_float/self.code_fmt.max_float
-        self.slope_fmt = Fixed.make(self.slope_float, res=slope_res, signed=False) 
-
-        # determine offset representation
-        self.offset_float = t_max_no_jitter - jitter_fmt.mid_float
-        self.offset_fmt = time_fmt.point_fmt.to_fixed(self.offset_float, signed=False)
+        # create PWL table to represent transfer function
+        self.pwl_table = self.get_pwl_table(time_point_fmt = time_fmt.point_fmt)
         
         # determine period format
-        self.prod_fmt = (self.code_fmt * self.slope_fmt).align_to(self.offset_fmt.point)
-        period_fmt = self.offset_fmt - self.prod_fmt
+        period_fmt = self.pwl_table.out_fmt.to_unsigned() + jitter_fmt
 
         super().__init__(period_fmt=period_fmt, jitter_fmt=jitter_fmt)
 
-    @property
-    def slope_int(self):
-        return self.slope_fmt.intval(self.slope_float)
+    def create_dco_tf(self, bias=0):
+        # generate the DCO transfer function
+        codes = np.arange(self.code_fmt.max_int+2) # one extra code is included for purposes of generating the PWL table
+        freqs = self.fmin + (self.fmax-self.fmin)*codes/(self.code_fmt.max_int)
+        periods = 1/(self.phases*freqs)
 
-    @property
-    def offset_int(self):
-        return self.offset_fmt.intval(self.offset_float)
+        ##########################################
+        # bias periods by average jitter
+        # TODO: fix this using signed jitter!
+        periods -= bias
+        ##########################################
 
-    @property
-    def code_init(self):
-        tinit = 1/(self.phases*self.finit)
-        retval = round((self.offset_float+self.jitter_fmt.mid_float-tinit)/self.slope_float)
+        # check period validity
+        assert np.all(periods > 0)
 
-        assert self.code_fmt.min_int <= retval <= self.code_fmt.max_int
-        return retval
+        # generate "waveform" representing DCO transfer function
+        self.dco_tf = Waveform(t=codes, v=periods)
+
+    def get_pwl_table(self, time_point_fmt, addr_bits_max=18, scale_factor=1e-12):
+        # set tolerance for approximation by pwl segments
+        min_step = np.min(np.abs(np.diff(self.dco_tf.v)))
+        pwl_tol = 0.5*time_point_fmt.res
+
+        # iterate over the number of ROM address bits
+        rom_addr_bits = 1
+        while (rom_addr_bits <= addr_bits_max) and (rom_addr_bits < self.code_fmt.n):
+            # compute the pwl addr format
+            high_bits_fmt = Fixed(width_fmt=WidthFormat(rom_addr_bits, signed=False),
+                                  point_fmt=PointFormat(self.code_fmt.point - (self.code_fmt.n - rom_addr_bits)))
+            low_bits_fmt = Fixed(width_fmt=WidthFormat(self.code_fmt.n - rom_addr_bits, signed=False),
+                                 point_fmt=self.code_fmt.point_fmt)
+
+            # calculate a list of times for the segment start times
+            codes =  np.arange(high_bits_fmt.width_fmt.max + 1) * high_bits_fmt.res
+
+            # build pwl table
+            pwl = self.dco_tf.make_pwl(times=codes, v_scale_factor=scale_factor)
+
+            assert pwl.error > 0
+            if pwl.error <= pwl_tol:
+                return PwlTable(pwls=[pwl],
+                                high_bits_fmt=high_bits_fmt,
+                                low_bits_fmt=low_bits_fmt,
+                                addr_offset_int=0,
+                                offset_point_fmt=time_point_fmt,
+                                slope_point_fmt=PointFormat.make(pwl_tol / low_bits_fmt.max_float))
+
+            rom_addr_bits += 1
+        else:
+            raise Exception('Failed to find a suitable PWL representation.')
 
 def main():
     time_fmt = Fixed.make([0, 10e-6], res=1e-14, signed=False)
@@ -110,14 +138,26 @@ def main():
     print('tx period:', str(tx_clk.period_fmt))
     print()
 
-    rx_clk = RxClock(finit=8e9, fmin=7.5e9, fmax=8.5e9, bits=14, jitter_pkpk=10e-12, time_fmt=time_fmt)
+    rx_clk = RxClock(fmin=7.5e9, fmax=8.5e9, bits=14, jitter_pkpk=10e-12, time_fmt=time_fmt)
     print('rx jitter:', str(rx_clk.jitter_fmt))
     print('rx period:', str(rx_clk.period_fmt))
-    print('rx product:', str(rx_clk.prod_fmt))
     print('rx code:', str(rx_clk.code_fmt))
-    print('rx slope:', str(rx_clk.slope_fmt))
-    print('rx offset:', str(rx_clk.offset_fmt))
-    print('rx code init:', str(rx_clk.code_init))
+    print()
+
+    dco_pwl_table = rx_clk.pwl_table
+    print('RX_DCO_BIAS_VAL: {}'.format(dco_pwl_table.bias_ints[0]))
+    print('RX_DCO_ADDR_WIDTH: {}'.format(dco_pwl_table.high_bits_fmt.n))
+    print('RX_DCO_SEGMENT_WIDTH: {}'.format(dco_pwl_table.low_bits_fmt.n))
+    print('RX_DCO_OFFSET_WIDTH: {}'.format(dco_pwl_table.offset_fmt.n))
+    print('RX_DCO_BIAS_WIDTH: {}'.format(dco_pwl_table.bias_fmt.n))
+    print('RX_DCO_SLOPE_WIDTH: {}'.format(dco_pwl_table.slope_fmt.n))
+    print('RX_DCO_SLOPE_POINT: {}'.format(dco_pwl_table.slope_fmt.point))
+
+    import matplotlib.pyplot as plt
+    pwl = dco_pwl_table.pwls[0]
+    t_eval = pwl.domain(1)
+    plt.plot(rx_clk.dco_tf.t, rx_clk.dco_tf.v, t_eval, pwl.eval(t_eval))
+    plt.show()
 
 if __name__=='__main__':
     main()

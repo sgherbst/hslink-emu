@@ -82,8 +82,9 @@ class RxDynamics:
         return step
 
 class RxCTLE:
-#    db_vals = [-4, -8, -12, -16]
-    db_vals = list(range(0, -16, -1))
+#    db_vals = [-4]
+    db_vals = [-4, -8, -12, -16]
+#    db_vals = list(range(0, -16, -1))
 
     def __init__(
         self,
