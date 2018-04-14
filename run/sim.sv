@@ -83,6 +83,22 @@ module tb;
 
     wire signed [DCO_CODE_WIDTH-1:0] ki_lf = `KI_LF;
 
+    // Scale factor on jitter of TX clock
+
+    `ifndef JITTER_SCALE_TX
+        `define JITTER_SCALE_TX 'd0
+    `endif
+
+    TX_JITTER_SCALE_FORMAT jitter_scale_tx = `JITTER_SCALE_TX;
+
+    // Scale factor on jitter of RX clock
+
+    `ifndef JITTER_SCALE_RX
+        `define JITTER_SCALE_RX 'd0
+    `endif
+
+    RX_JITTER_SCALE_FORMAT jitter_scale_rx = `JITTER_SCALE_RX;
+
     // For CPU simulation, time_trig is used to 
     // indicate the end of simulation.  On the
     // FPGA, this signal is used for triggering
@@ -123,7 +139,9 @@ module tb;
         .dco_init_ext(dco_init),
         .kp_lf_ext(kp_lf),
         .ki_lf_ext(ki_lf),
-        .time_trig_ext(time_trig)
+        .time_trig_ext(time_trig),
+        .jitter_scale_tx_ext(jitter_scale_tx),
+        .jitter_scale_rx_ext(jitter_scale_rx)
     );
 
 endmodule

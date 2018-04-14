@@ -10,6 +10,7 @@ module rx_clock #(
     input wire rst,
     input TIME_FORMAT time_next,
     input DCO_CODE_FORMAT code,
+    input RX_JITTER_SCALE_FORMAT jitter_scale,
     output TIME_FORMAT time_clock,
     output wire [1:0] cke_out,
     output wire time_eq
@@ -64,11 +65,15 @@ module rx_clock #(
         .PERIOD_WIDTH(DCO_PERIOD_WIDTH),
         .JITTER_WIDTH(RX_JITTER_WIDTH),
         .UPDATE_WIDTH(RX_UPDATE_WIDTH),
+        .JITTER_LFSR_WIDTH(RX_JITTER_LFSR_WIDTH),
+        .JITTER_SCALE_WIDTH(RX_JITTER_SCALE_WIDTH),
+        .JITTER_SCALE_POINT(RX_JITTER_SCALE_POINT),
         .lfsr_init(lfsr_init)
     ) clock_i(.clk(clk), 
         .rst(rst),
         .time_next(time_next),
         .period(period),
+        .jitter_scale(jitter_scale),
         .time_clock(time_clock),
         .cke_out(cke_out),
         .time_eq(time_eq)

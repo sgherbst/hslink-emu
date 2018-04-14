@@ -351,16 +351,20 @@ class Emulation:
         pack.add_fixed_format(self.dt_fmt, 'DT')
 
         # TX clock
-        pack.add_fixed_format(self.clk_tx.jitter_fmt, 'TX_JITTER')
+        pack.add_fixed_format(self.clk_tx.jitter_props.jitter_fmt, 'TX_JITTER')
+        pack.add_fixed_format(self.clk_tx.jitter_props.jitter_scale_fmt, 'TX_JITTER_SCALE')
         pack.add_fixed_format(self.clk_tx.period_fmt, 'TX_PERIOD')
         pack.add_fixed_format(self.clk_tx.update_fmt, 'TX_UPDATE')
+        pack.add(VerilogConstant(name='TX_JITTER_LFSR_WIDTH', value=self.clk_tx.jitter_props.lfsr_fmt.n, kind='int'))
         pack.add(VerilogConstant(name='TX_PERIOD_VAL', value=self.clk_tx.T_nom_int, kind='longint'))
 
         # RX clock
-        pack.add_fixed_format(self.clk_rx.jitter_fmt, 'RX_JITTER')
+        pack.add_fixed_format(self.clk_rx.jitter_props.jitter_fmt, 'RX_JITTER')
+        pack.add_fixed_format(self.clk_rx.jitter_props.jitter_scale_fmt, 'RX_JITTER_SCALE')
         pack.add_fixed_format(self.clk_rx.period_fmt, 'DCO_PERIOD')
         pack.add_fixed_format(self.clk_rx.update_fmt, 'RX_UPDATE')
         pack.add_fixed_format(self.clk_rx.code_fmt, 'DCO_CODE')
+        pack.add(VerilogConstant(name='RX_JITTER_LFSR_WIDTH', value=self.clk_rx.jitter_props.lfsr_fmt.n, kind='int'))
 
         self.time_package = pack
 

@@ -7,12 +7,16 @@ module clock #(
     parameter integer PERIOD_WIDTH = 1,
     parameter integer JITTER_WIDTH = 1,
     parameter integer UPDATE_WIDTH = 1,
+    parameter integer JITTER_LFSR_WIDTH = 1,
+    parameter integer JITTER_SCALE_WIDTH = 1,
+    parameter integer JITTER_SCALE_POINT = 1,
     parameter lfsr_init = 1
 )(
     input wire clk,
     input wire rst,
     input TIME_FORMAT time_next,
     input wire [PERIOD_WIDTH-1:0] period,
+    input wire [JITTER_SCALE_WIDTH-1:0] jitter_scale,
     output TIME_FORMAT time_clock,
     output reg [N-1:0] cke_out,
     output wire time_eq
@@ -21,20 +25,36 @@ module clock #(
     assign time_eq = (time_next == time_clock) ? 1'b1 : 1'b0;
 
     // lfsr for jitter
-    wire [JITTER_WIDTH-1:0] lfsr_state;
+    wire [JITTER_LFSR_WIDTH-1:0] jitter_lfsr_state;
     lfsr_cke #(
-        .n(JITTER_WIDTH),
+        .n(JITTER_LFSR_WIDTH),
         .init(lfsr_init)
     ) lfsr_i(
         .clk(clk),
         .cke(time_eq),
         .rst(rst),
-        .state(lfsr_state)
+        .state(jitter_lfsr_state)
     );
 
-    // jitter is the signed interpretation of the LFSR output
+    // scale jitter by the desired amount
     wire signed [JITTER_WIDTH-1:0] jitter;
-    assign jitter = $signed(lfsr_state);
+    my_mult_signed #(
+        .a_bits(JITTER_LFSR_WIDTH),
+        .a_point(0),
+
+        // note that the signed version of
+        // the scale factor requires an 
+        // extra bit
+        .b_bits(JITTER_SCALE_WIDTH+1), 
+
+        .b_point(JITTER_SCALE_POINT),
+        .c_bits(JITTER_WIDTH),
+        .c_point(TIME_POINT)
+    ) jitter_prod (
+        .a($signed(jitter_lfsr_state)),
+        .b($signed({1'b0, jitter_scale})),
+        .c(jitter)
+    );
 
     // compute the time increment, including jitter
     // it's signed although the top bit should never be set

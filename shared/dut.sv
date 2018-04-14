@@ -21,7 +21,9 @@ module dut #(
     input DCO_CODE_FORMAT dco_init_ext,
     input signed [DCO_CODE_WIDTH-1:0] ki_lf_ext,
     input signed [DCO_CODE_WIDTH-1:0] kp_lf_ext,
-    input wire TIME_FORMAT time_trig_ext
+    input TIME_FORMAT time_trig_ext,
+    input TX_JITTER_SCALE_FORMAT jitter_scale_tx_ext,
+    input RX_JITTER_SCALE_FORMAT jitter_scale_rx_ext
 );
     //////////////////////
     // Debug signals
@@ -75,6 +77,8 @@ module dut #(
     wire signed [DCO_CODE_WIDTH-1:0] kp_lf;
     wire signed [DCO_CODE_WIDTH-1:0] ki_lf;
     TIME_FORMAT time_trig;
+    TX_JITTER_SCALE_FORMAT jitter_scale_tx;
+    RX_JITTER_SCALE_FORMAT jitter_scale_rx;
 
     // VIO
     generate
@@ -87,7 +91,9 @@ module dut #(
                 .probe_out3(dco_init),
                 .probe_out4(kp_lf),
                 .probe_out5(ki_lf),
-                .probe_out6(time_trig)
+                .probe_out6(time_trig),
+                .probe_out7(jitter_scale_tx),
+                .probe_out8(jitter_scale_rx)
             );
         end else begin
             assign rst = rst_ext;
@@ -97,6 +103,8 @@ module dut #(
             assign kp_lf = kp_lf_ext;
             assign ki_lf = ki_lf_ext;
             assign time_trig = time_trig_ext;
+            assign jitter_scale_tx = jitter_scale_tx_ext;
+            assign jitter_scale_rx = jitter_scale_rx_ext;
         end
     endgenerate
 
@@ -121,6 +129,7 @@ module dut #(
         .clk(clk_sys),
         .rst(rst_sys),
         .time_next(time_next),
+        .jitter_scale(jitter_scale_tx),
         .time_clock(time_in[0]),
         .cke_out(cke_tx),
         .time_eq(time_eq_tx)
@@ -199,6 +208,7 @@ module dut #(
     rx_clock rx_clk_i (
         .code(dco_code),
         .time_next(time_next),
+        .jitter_scale(jitter_scale_rx),
         .time_clock(time_in[1]),
         .cke_out({cke_rx_p, cke_rx_n}),
         .time_eq(time_eq_rx),

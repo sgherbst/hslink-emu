@@ -160,4 +160,15 @@ module pwl #(
   
     // assign output as sum of linear correction, offset from ROM, and a bias value
     assign out = offset + prod + bias;
+
+
+    // overflow checking for PWL input (simulation only...)
+    `ifdef PWL_OVFL_CHK
+        always @(in or addr_offset) begin
+            if ((longint'(in)-longint'(addr_offset)) >= (longint'(1)<<longint'(in_diff_width))) begin
+                $error("PWL input overflow.");
+            end
+        end
+    `endif
+
 endmodule
