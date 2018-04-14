@@ -8,12 +8,11 @@ from math import floor
 import os.path
 import sys
 import logging
-import json
 
 from msemu.ctle import RxDynamics
 from msemu.pwl import Waveform
 from msemu.cmd import get_parser
-from msemu.fixed import Fixed
+from msemu.ila import IlaData
 
 class Data:
     def __init__(self, tx, rxp, rxn):
@@ -26,73 +25,18 @@ class IdealResult:
         self.in_ = in_
         self.out = out
 
-def parse_ila_header(header, in_fmt, out_fmt, time_fmt):
-    # split header into column names
-    cols = header.strip().split(',')
-
-    # determine column locations of the signals of interest
-    time_curr = cols.index('time_curr[{}:{}]'.format(time_fmt.n-1,0))
-    sig_rx = cols.index('sig_rx[{}:{}]'.format(out_fmt.n - 1, 0))
-    sig_tx = cols.index('sig_tx[{}:{}]'.format(in_fmt.n - 1, 0))
-    cke_rx_p = cols.index('cke_rx_p')
-    cke_rx_n = cols.index('cke_rx_n')
-    cke_tx = cols.index('cke_tx')
-    sim_done = cols.index('sim_done_reg')
-
-    # create dictionary mapping a signal name to an index
-    cols = {
-        'time_curr': time_curr,
-        'sig_rx': sig_rx,
-        'sig_tx': sig_tx,
-        'cke_rx_n': cke_rx_n,
-        'cke_rx_p': cke_rx_p,
-        'cke_tx': cke_tx,
-        'sim_done': sim_done
-    }
-
-    # make sure that all signals of interest were found
-    assert all(cols != -1 for cols in cols.values())
-
-    return cols
-
-def get_ila_data(build_dir, data_dir):
+def get_ila_data(ila_data):
     # get data formats
-    with open(os.path.join(build_dir, 'fmt_dict.json')) as f:
-        fmt_dict = json.loads(f.read())
 
-    in_fmt = Fixed.from_dict(fmt_dict['in_fmt'])
-    out_fmt = Fixed.from_dict(fmt_dict['out_fmt'])
-    time_fmt = Fixed.from_dict(fmt_dict['time_fmt'])
 
-    # read data file, splitting on commands
-    data_file = os.path.join(data_dir, 'iladata.csv')
-    with open(data_file, 'r') as f:
-        header = f.readline()
 
-    # read the rest of the data
-    cols = parse_ila_header(header, in_fmt, out_fmt, time_fmt)
-    data = genfromtxt(data_file, delimiter=',', skip_header=1, autostrip=True, dtype=int)
+    tx_file = os.path.join(data_dir, 'ila', 'large_step', 'ila_0_data.csv')
+    rx_p_file = os.path.join(data_dir, 'ila', 'large_step', 'ila_1_data.csv')
+    rx_n_file = os.path.join(data_dir, 'ila', 'large_step', 'ila_2_data.csv')
 
-    # determine range of valid data
-    valid = data[:, cols['sim_done']] != 1
-
-    # get TX data
-    rows_tx = np.logical_and(data[:, cols['cke_tx']], valid) == 1
-    # adjust piecewise constant representation
-    v_tx = data[rows_tx, cols['sig_tx']]*in_fmt.res
-    v_tx = np.concatenate((v_tx[1:], [v_tx[-1]]))
-    tx = Waveform(t=data[rows_tx, cols['time_curr']]*time_fmt.res,
-                  v=v_tx)
-
-    # get RXP data
-    rows_rx_p = np.logical_and(data[:, cols['cke_rx_p']], valid) == 1
-    rxp = Waveform(t=data[rows_rx_p, cols['time_curr']]*time_fmt.res,
-                   v=data[rows_rx_p, cols['sig_rx']]*out_fmt.res)
-
-    # get RXN data
-    rows_rx_n = np.logical_and(data[:, cols['cke_rx_n']], valid) == 1
-    rxn = Waveform(t=data[rows_rx_n, cols['time_curr']]*time_fmt.res,
-                   v=data[rows_rx_n, cols['sig_rx']]*out_fmt.res)
+    tx = read_ila_tx(tx_file, in_fmt=in_fmt, time_fmt=time_fmt)
+    rxp = read_ila_rx_p(rx_p_file, out_fmt=out_fmt, time_fmt=time_fmt)
+    rxn = read_ila_rx_n(rx_n_file, out_fmt=out_fmt, time_fmt=time_fmt)
 
     return Data(tx=tx, rxp=rxp, rxn=rxn)
 
@@ -159,16 +103,23 @@ def report_error(data, ideal):
     print('error statistics: ')
     print(describe(err))
 
-def plot_waveforms(data, ideal, dir_name, plot_prefix):
-    plt.step(ideal.in_.t, ideal.in_.v, '-k', where='post', label='in')
-    plt.plot(data.rxp.t, data.rxp.v, 'bo', label='rxp', markersize=3)
-    plt.plot(data.rxn.t, data.rxn.v, 'ro', label='rxn', markersize=3)
-    plt.plot(ideal.out.t, ideal.out.v, '-g', label='sim')
-    plt.ylim(-1.25, 1.25)
-    plt.legend(loc='lower right')
-    plt.xlabel('time')
-    plt.ylabel('value')
-    plt.savefig(os.path.join(dir_name, plot_prefix+'_transient.pdf'))
+def plot_waveforms(data, ideal, fig_dir, plot_prefix, fmts=['png', 'pdf', 'eps']):
+    #plt.step(ideal.in_.t, ideal.in_.v, '-k', where='post', label='in')
+    plt.plot(np.concatenate((data.rxp.t, data.rxn.t))*1e9,
+             np.concatenate((data.rxp.v, data.rxn.v)),
+             'bo', label='Emulation', markersize=2)
+    plt.plot(ideal.out.t*1e9, ideal.out.v, '-g', label='Ideal', linewidth=1)
+    plt.ylim(-0.66, 0.65)
+    plt.xlim(10.3, 16.9)
+    plt.legend(loc='lower left')
+    plt.xlabel('Time (ns)')
+    plt.ylabel('Value')
+    plt.title('Transient Accuracy')
+
+    plot_name = os.path.join(fig_dir, plot_prefix+'_emu_vs_ideal_comparison')
+    for fmt in fmts:
+        plt.savefig(plot_name + '.' + fmt, bbox_inches='tight')
+
     plt.show()
 
 def main():
@@ -183,7 +134,13 @@ def main():
     rx_dyn = RxDynamics(dir_name=args.channel_dir)
 
     if args.use_ila:
-        data = get_ila_data(build_dir=args.build_dir, data_dir=args.data_dir)
+        fmt_dict_file = os.path.join(args.build_dir, 'fmt_dict.json')
+        ila_dir_name = os.path.join(args.data_dir, 'ila', 'large_step')
+        ila_data = IlaData(ila_dir_name=ila_dir_name, fmt_dict_file=fmt_dict_file)
+        data = Data(tx=ila_data.tx.filter_in,
+                    rxp=ila_data.rxp.filter_out,
+                    rxn=ila_data.rxn.filter_out)
+
         plot_prefix = 'ila'
     else:
         data = get_sim_data(args.data_dir)
@@ -193,7 +150,7 @@ def main():
 
     report_error(data=data, ideal=ideal)
 
-    plot_waveforms(data=data, ideal=ideal, dir_name=args.data_dir, plot_prefix=plot_prefix)
+    plot_waveforms(data=data, ideal=ideal, fig_dir=args.fig_dir, plot_prefix=plot_prefix)
     
 if __name__=='__main__':
     main()

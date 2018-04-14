@@ -4,6 +4,7 @@ __pycache__
 build
 data
 channel
+figs
 *.egg-info
 *.s4p
 *.pyc

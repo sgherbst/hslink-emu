@@ -448,7 +448,8 @@ class Emulation:
         fmt_dict = {
             'in_fmt': self.in_fmt.to_dict(),
             'out_fmt': self.out_fmt.to_dict(),
-            'time_fmt': self.time_fmt.to_dict()
+            'time_fmt': self.time_fmt.to_dict(),
+            'comp_fmt': self.comp_in_fmt.to_dict()
         }
         fmt_dict_str = json.dumps(fmt_dict, indent=2, sort_keys=True)
         fmt_dict_file = os.path.join(self.build_dir, 'fmt_dict.json')

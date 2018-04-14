@@ -151,6 +151,12 @@ class Waveform:
         assert n <= self.n
         return Waveform(t=self.t[:n], v=self.v[:n])
 
+    def start_after(self, t0):
+        idx = np.argmax(self.t >= t0)
+        assert self.t[idx] >= t0
+
+        return Waveform(t=self.t[idx:], v=self.v[idx:])
+
     @staticmethod
     def get_dt(t):
         time_diffs = np.diff(t)

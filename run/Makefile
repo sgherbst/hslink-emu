@@ -42,6 +42,7 @@ CPU_DIR = $(abspath $(TOP_DIR)/cpu/)
 DATA_DIR = $(abspath $(TOP_DIR)/data/)
 FPGA_DIR = $(abspath $(TOP_DIR)/fpga/)
 SHARED_DIR = $(abspath $(TOP_DIR)/shared/)
+FIG_DIR = $(abspath $(TOP_DIR)/figs/)
 
 ROM_DIR = $(abspath $(BUILD_DIR)/roms/)
 
@@ -54,6 +55,7 @@ PYTHON_OPTS += --build_dir $(BUILD_DIR)
 PYTHON_OPTS += --channel_dir $(CHANNEL_DIR)
 PYTHON_OPTS += --data_dir $(DATA_DIR)
 PYTHON_OPTS += --rom_dir $(ROM_DIR)
+PYTHON_OPTS += --fig_dir $(FIG_DIR)
 
 #########################################
 # git options
@@ -133,6 +135,12 @@ check:
 check_ila:
 	$(PYTHON) check.py $(PYTHON_OPTS) --rx_setting $(RX_SETTING) --use_ila
 
+check_ila_loopback:
+	$(PYTHON) check_ila_loopback.py $(PYTHON_OPTS) 
+
+check_ila_jitter:
+	$(PYTHON) check_ila_jitter.py $(PYTHON_OPTS) 
+
 check_filter:
 	$(PYTHON) check_filter.py $(PYTHON_OPTS) --rx_setting $(RX_SETTING)
 
@@ -161,6 +169,16 @@ sim_filter:
 
 sim_dco:
 	$(SIM_CMD) $(SIM_OPTS) $(SIM_DEBUG_OPTS) sim_dco.sv
+
+#########################
+# plotting commands
+#########################
+
+plot_dco_settling:
+	$(PYTHON) plot_dco_settling.py $(PYTHON_OPTS)
+
+plot_input_hist:
+	$(PYTHON) plot_input_hist.py $(PYTHON_OPTS)
 
 #########################
 # cleaning commands

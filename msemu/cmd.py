@@ -8,6 +8,7 @@ def get_parser():
     parser.add_argument('--rom_dir', type=str, help='Directory where ROM files should be placed.')
     parser.add_argument('--data_dir', type=str, help='Directory where data should be placed.')
     parser.add_argument('--channel_dir', type=str, help='Directory where channel measurements should be placed.')
+    parser.add_argument('--fig_dir', type=str, help='Directory where channel measurements should be placed.')
 
     return parser
 
