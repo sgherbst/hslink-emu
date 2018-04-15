@@ -25,11 +25,14 @@ def main():
     out_tx_str = stringify(out_tx.v)
     out_rx_str = stringify(out_rx.v)
 
+    print('Running loopback test...')
     idx = out_rx_str.index(out_tx_str)
-    assert idx >= 0
+    assert idx >= 0, 'Loopback test failed :-('
 
+    print('Loopback test passed :-)')
     delay = out_rx.t[idx] - out_tx.t[0]
-    print('Delay: {:0.3f} ns'.format(1e9*delay))
+
+    print('TX-RX skew: {:0.3f} ns'.format(1e9*delay))
 
 if __name__=='__main__':
     main()

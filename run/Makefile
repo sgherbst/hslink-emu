@@ -132,21 +132,6 @@ build:
 check:
 	$(PYTHON) check.py $(PYTHON_OPTS) --rx_setting $(RX_SETTING)
 
-check_ila:
-	$(PYTHON) check.py $(PYTHON_OPTS) --rx_setting $(RX_SETTING) --use_ila
-
-ila_sweep_write:
-	$(PYTHON) process_ila_sweep.py $(PYTHON_OPTS) --write
-
-ila_sweep_read:
-	$(PYTHON) process_ila_sweep.py $(PYTHON_OPTS) --read
-
-check_ila_loopback:
-	$(PYTHON) check_ila_loopback.py $(PYTHON_OPTS) 
-
-check_ila_jitter:
-	$(PYTHON) check_ila_jitter.py $(PYTHON_OPTS) 
-
 check_filter:
 	$(PYTHON) check_filter.py $(PYTHON_OPTS) --rx_setting $(RX_SETTING)
 
@@ -177,14 +162,40 @@ sim_dco:
 	$(SIM_CMD) $(SIM_OPTS) $(SIM_DEBUG_OPTS) sim_dco.sv
 
 #########################
-# plotting commands
+# figure generation commands
 #########################
+
+all_figs: plot_input_hist plot_dco_settling check_ila plot_pies
+
+check_ila:
+	$(PYTHON) check.py $(PYTHON_OPTS) --rx_setting $(RX_SETTING) --use_ila
 
 plot_dco_settling:
 	$(PYTHON) plot_dco_settling.py $(PYTHON_OPTS)
 
 plot_input_hist:
 	$(PYTHON) plot_input_hist.py $(PYTHON_OPTS)
+
+plot_pies:
+	$(PYTHON) plot_pies.py $(PYTHON_OPTS)
+
+#########################
+# figure generation commands
+#########################
+
+measure_all: ila_sweep_write ila_sweep_read check_ila_loopback check_ila_jitter
+
+ila_sweep_write:
+	$(PYTHON) process_ila_sweep.py $(PYTHON_OPTS) --write
+
+ila_sweep_read:
+	$(PYTHON) process_ila_sweep.py $(PYTHON_OPTS) --read
+
+check_ila_loopback:
+	$(PYTHON) check_ila_loopback.py $(PYTHON_OPTS) 
+
+check_ila_jitter:
+	$(PYTHON) check_ila_jitter.py $(PYTHON_OPTS) 
 
 #########################
 # cleaning commands

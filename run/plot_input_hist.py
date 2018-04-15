@@ -20,7 +20,7 @@ def main(fmts=['png', 'pdf', 'eps']):
     filter_out = ila_data.rxp.filter_out.start_after(args.trim)
     comp_in = ila_data.rxp.comp_in.start_after(args.trim)
 
-    plt.hist(comp_in.v, 100, normed=1, facecolor='blue', alpha=1, label='Comparator Input')
+    plt.hist(comp_in.v, 100, normed=1, facecolor='blue', alpha=1, label='DFE Output')
     plt.hist(filter_out.v, 100, normed=1, facecolor='green', alpha=0.5, label='CTLE Output')
     plt.legend(loc='upper center')
 

@@ -90,10 +90,10 @@ def report_error(data, ideal):
 
 def plot_waveforms(data, ideal, fig_dir, plot_prefix, fmts=['png', 'pdf', 'eps']):
     #plt.step(ideal.in_.t, ideal.in_.v, '-k', where='post', label='in')
+    plt.plot(ideal.out.t*1e9, ideal.out.v, '-g', label='Ideal', linewidth=1)
     plt.plot(np.concatenate((data.rxp.t, data.rxn.t))*1e9,
              np.concatenate((data.rxp.v, data.rxn.v)),
              'bo', label='Emulation', markersize=2)
-    plt.plot(ideal.out.t*1e9, ideal.out.v, '-g', label='Ideal', linewidth=1)
     plt.ylim(-0.66, 0.65)
     plt.xlim(10.3, 16.9)
     plt.legend(loc='lower left')

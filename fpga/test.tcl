@@ -19,12 +19,16 @@ set_property DISPLAY_RADIX SIGNED [get_hw_probes filter_out_1]
 set_property DISPLAY_RADIX SIGNED [get_hw_probes comp_in]
 set_property DISPLAY_RADIX SIGNED [get_hw_probes dfe_out]
 set_property DISPLAY_RADIX UNSIGNED [get_hw_probes time_curr_1]
+set_property DISPLAY_RADIX UNSIGNED [get_hw_probes dco_code]
 
 # RX N probes
 set_property DISPLAY_RADIX SIGNED [get_hw_probes filter_out]
 set_property DISPLAY_RADIX UNSIGNED [get_hw_probes time_curr_2]
 
-for { set rx_setting 0}  {$rx_setting <= 15} {incr rx_setting} {
+# rx_setting in [0, 15]
+# tx_setting in [0, 9]
+
+for { set rx_setting 9}  {$rx_setting <= 15} {incr rx_setting} {
 	for { set tx_setting 0} {$tx_setting <= 9} {incr tx_setting} {
 		puts "$rx_setting, $tx_setting"
 

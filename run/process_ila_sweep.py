@@ -21,8 +21,17 @@ class StatTracker:
         self.worst_err_dir_n = None
 
     def read_waves(self, dir_name):
-        emu_wave = Waveform.load(os.path.join(dir_name, 'emu.npy'))
-        ideal_wave = Waveform.load(os.path.join(dir_name, 'ideal.npy'))
+        try:
+            emu_wave = Waveform.load(os.path.join(dir_name, 'emu.npy'))
+        except:
+            logging.debug('Could not find emulation waveform.')
+            return
+
+        try:
+            ideal_wave = Waveform.load(os.path.join(dir_name, 'ideal.npy'))
+        except:
+            logging.debug('Could not find ideal waveform.')
+            return
 
         # compute percentage error
         err = emu_wave.v - ideal_wave.v
@@ -100,6 +109,7 @@ def main():
     parser = get_parser()
     parser.add_argument('--write', action='store_true', help='Write error data.')
     parser.add_argument('--read', action='store_true', help='Read error data.')
+    parser.add_argument('--restart', action='store_true', help='Read error data.')
     args = parser.parse_args()
 
     # create the RxDynamics object
@@ -113,6 +123,7 @@ def main():
     pat = re.compile(r'(\d+)_(\d+)')
     for filename in os.listdir(sweep_dir):
     #for filename in ['0_0']:
+    #for filename in ['9_1']:
         if not os.path.isdir(os.path.join(sweep_dir, filename)):
             continue
 
@@ -126,14 +137,20 @@ def main():
             ila_dir_name = os.path.join(sweep_dir, filename)
 
             if args.write:
-                ila_data = IlaData(ila_dir_name=ila_dir_name, fmt_dict_file=fmt_dict_file)
-                data = Data(tx=ila_data.tx.filter_in,
-                            rxp=ila_data.rxp.filter_out,
-                            rxn=ila_data.rxn.filter_out)
+                if (args.restart or
+                    (not os.path.isfile(os.path.join(ila_dir_name, 'emu.npy'))) or
+                    (not os.path.isfile(os.path.join(ila_dir_name, 'ideal.npy')))):
 
-                ideal = get_ideal(rx_dyn=rx_dyn, tx=ila_data.tx.filter_in, rx_setting=rx_setting)
+                    ila_data = IlaData(ila_dir_name=ila_dir_name, fmt_dict_file=fmt_dict_file)
+                    data = Data(tx=ila_data.tx.filter_in,
+                                rxp=ila_data.rxp.filter_out,
+                                rxn=ila_data.rxn.filter_out)
 
-                write_waves(data=data, ideal=ideal, dir_name=ila_dir_name)
+                    ideal = get_ideal(rx_dyn=rx_dyn, tx=ila_data.tx.filter_in, rx_setting=rx_setting)
+
+                    write_waves(data=data, ideal=ideal, dir_name=ila_dir_name)
+                else:
+                    logging.debug('Skipping directory.')
             elif args.read:
                 stat_tracker.read_waves(dir_name=ila_dir_name)
 
