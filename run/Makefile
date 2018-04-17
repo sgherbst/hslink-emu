@@ -165,7 +165,7 @@ sim_dco:
 # figure generation commands
 #########################
 
-all_figs: plot_input_hist plot_dco_settling check_ila plot_pies
+all_figs: plot_input_hist plot_dco_settling check_ila plot_pies plot_steps plot_rom_bits
 
 check_ila:
 	$(PYTHON) check.py $(PYTHON_OPTS) --rx_setting $(RX_SETTING) --use_ila
@@ -178,6 +178,15 @@ plot_input_hist:
 
 plot_pies:
 	$(PYTHON) plot_pies.py $(PYTHON_OPTS)
+
+plot_rom_bits:
+	$(PYTHON) plot_rom_bits.py $(PYTHON_OPTS)
+
+plot_pwl:
+	$(PYTHON) plot_pwl.py $(PYTHON_OPTS)
+
+plot_pulses:
+	$(PYTHON) plot_pulses.py $(PYTHON_OPTS)
 
 #########################
 # figure generation commands
@@ -196,6 +205,9 @@ check_ila_loopback:
 
 check_ila_jitter:
 	$(PYTHON) check_ila_jitter.py $(PYTHON_OPTS) 
+
+plot_steps:
+	$(PYTHON) plot_steps.py $(PYTHON_OPTS) 
 
 #########################
 # cleaning commands

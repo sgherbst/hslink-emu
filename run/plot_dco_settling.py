@@ -18,7 +18,7 @@ def main(fmts=['png', 'pdf', 'eps']):
 
     dco_code = ila_data.rxp.dco_code
 
-    plt.plot(dco_code.t[1:]*1e9, dco_code.v[1:])
+    plt.plot(dco_code.t[1:]*1e9, dco_code.v[1:], linewidth=0.1)
 
     plt.xlabel('Time (ns)')
     plt.ylabel('DCO Code')
@@ -26,7 +26,7 @@ def main(fmts=['png', 'pdf', 'eps']):
 
     plot_name = os.path.join(args.fig_dir, 'rx_startup_transient')
     for fmt in fmts:
-        plt.savefig(plot_name + '.' + fmt)
+        plt.savefig(plot_name + '.' + fmt, bbox_inches='tight')
 
     plt.show()
     

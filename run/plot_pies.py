@@ -16,6 +16,16 @@ def main(fmts=['png', 'pdf', 'eps']):
 
     r = ResourceCSV(os.path.join(args.data_dir, 'resource_utilization_short.csv'))
 
+    # print out 
+
+    alloc = ResourceAllocation(r.get_util('dut'))
+
+    alloc.add(r.get_util('dbg_hub'), 'Debug')
+    alloc.add(r.get_util('ila_0_i'), 'Debug')
+    alloc.add(r.get_util('ila_1_i'), 'Debug')
+    alloc.add(r.get_util('ila_2_i'), 'Debug')
+    alloc.add(r.get_util('vio_0_i'), 'Debug')
+
     # top level resources
 
     alloc = ResourceAllocation(r.get_util('dut'))

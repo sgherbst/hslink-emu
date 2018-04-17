@@ -3,11 +3,13 @@ import re
 import collections
 
 class Utilization:
-    def __init__(self):
+    def __init__(self, init_props=None):
         self.props = { 'Slice LUTs': 0,
                        'Slice Registers': 0,
                        'DSPs': 0,
                        'Block RAM Tile': 0 }
+        if init_props is not None:
+            self.add(init_props)
 
     def add(self, props):
         for prop in self.props:

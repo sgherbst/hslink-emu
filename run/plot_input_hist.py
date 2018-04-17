@@ -30,7 +30,7 @@ def main(fmts=['png', 'pdf', 'eps']):
 
     plot_name = os.path.join(args.fig_dir, 'rx_histograms')
     for fmt in fmts:
-        plt.savefig(plot_name + '.' + fmt)
+        plt.savefig(plot_name + '.' + fmt, bbox_inches='tight')
 
     plt.show()
     
