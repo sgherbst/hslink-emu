@@ -11,6 +11,8 @@ module ila_0 (
     input probe4
 );
 
+    `ifndef SIM_PROFILE
+
     integer f;
     initial begin
         f = $fopen({DATA_DIR, "/", "tx", ".txt"}, "w");
@@ -25,5 +27,7 @@ module ila_0 (
                     real'(probe3)/(real'(2)**real'(FILTER_IN_POINT)));
         end
     end
+
+    `endif
 
 endmodule
