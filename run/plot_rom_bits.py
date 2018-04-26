@@ -58,8 +58,7 @@ def main(fmts=['png', 'pdf', 'eps']):
     plt.plot(bits_kb)
     for k in range(1,max_half_brams+1):
         hue = (1 - (k-1)/(max_half_brams-1))/3
-        color = hsv_to_rgb([hue, 0.9, 0.8])
-        plt.plot([0, n_ui-1], [k*half_bram_kb, k*half_bram_kb], '--', color=color)
+        plt.plot([0, n_ui-1], [k*half_bram_kb, k*half_bram_kb], '--', color='0.5')
         plt.text(0, (k+0.1)*half_bram_kb, '{:0.1f} BRAM'.format(k/2))
 
     plt.xlabel('Tap #')

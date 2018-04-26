@@ -209,6 +209,12 @@ check_ila_jitter:
 plot_steps:
 	$(PYTHON) plot_steps.py $(PYTHON_OPTS) 
 
+analyze_roms:
+	$(PYTHON) analyze_roms.py $(PYTHON_OPTS) 
+
+sim_python:
+	$(PYTHON) sim_python.py $(PYTHON_OPTS) 
+
 #########################
 # cleaning commands
 #########################
