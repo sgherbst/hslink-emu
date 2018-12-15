@@ -50,7 +50,7 @@ ROM_DIR = $(abspath $(BUILD_DIR)/roms/)
 # python options
 # only python3 is supported at this time
 #########################################
-PYTHON = python3
+PYTHON = source ../env/bin/activate; python
 PYTHON_OPTS += --build_dir $(BUILD_DIR)
 PYTHON_OPTS += --channel_dir $(CHANNEL_DIR)
 PYTHON_OPTS += --data_dir $(DATA_DIR)

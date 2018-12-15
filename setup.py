@@ -16,6 +16,7 @@ setup(
         'matplotlib',
         'mpltools',
         'wget',
-        'cvxpy'
+        'cvxpy',
+        'scikit-rf'
     ]
 )
