@@ -2,8 +2,11 @@
 
 * clone repository
 * cd msemu
-* pip3 install --user virtualenv
-* virtualenv --python=/usr/bin/python3 env
+* with virtualenv:
+** pip3 install --user virtualenv
+** virtualenv --python=/usr/bin/python3 env
+* with conda:
+** conda create --name=msemu python=3.6
 * source env/bin/activate
 * pip install -e .
 
