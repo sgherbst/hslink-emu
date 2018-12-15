@@ -7,8 +7,7 @@
 * source env/bin/activate
 * pip install -e .
 * pip install cvxpy
-
-* source env/bin/activate
+* cd run
 * make build
 
 # changing the CTLE transfer function
