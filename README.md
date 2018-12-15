@@ -6,6 +6,7 @@
 * virtualenv --python=/usr/bin/python3 env
 * source env/bin/activate
 * pip install -e .
+* pip install cvxpy
 
 * source env/bin/activate
 * make build
