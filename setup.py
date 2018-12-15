@@ -3,8 +3,19 @@ from setuptools import setup, find_packages
 setup(
     name="msemu",
     version="0.0.1",
-    long_description=__doc__,
-    packages=find_packages(),
+    description='Mixed-signal emulation generator',
+    url='https://github.com/sgherbst/msemu',
+    author='Steven Herbst',
+    author_email='sherbst@stanford.edu',
+    packages=['msemu'],
     include_package_data=True,
     zip_safe=False,
+    install_requires=[
+        'numpy',
+        'scipy',
+        'matplotlib',
+        'mpltools',
+        'wget',
+        'cvxpy'
+    ]
 )
