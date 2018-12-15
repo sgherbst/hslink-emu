@@ -2,7 +2,6 @@
 
 * clone repository
 * cd msemu
-* with virtualenv:
 * pip3 install --user virtualenv
 * virtualenv --python=/usr/bin/python3 env
 * source env/bin/activate
