@@ -1,4 +1,4 @@
-# msemu
+# hslink-emu
 
 * clone repository
 * cd msemu
