@@ -30,10 +30,7 @@ The instructions below assume that **python** and **pip** commands refer to a Py
 2. Comment out lines 125-135 because they are specific to the PCIe reference CTLE design
 
 ### Changing the channel response
-1. Go to the top-level hslink-emu directory and create a directory for channel data:
-```shell
-> mkdir -p channel
-```
+1. Create a directory called "channel" in the top-level hslink-emu directory.
 2. Put your own S-parameter file in the channel directory.  The file should be Touchstone S4P (four port) and the port assignment numbers must match figure 3 of https://www.aesa-cortaillod.com/fileadmin/documents/knowledge/AN_150421_E_Single_ended_S_Parameters.pdf.
 3. Go to hslink-emu/msemu/rf.py, then change **file_name** value to the name of your S-parameter file.
 
