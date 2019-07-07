@@ -56,7 +56,8 @@ GIT = git
 # simulation options
 #########################################
 
-SIM_CMD = rm -rf ../build/project && vivado -nolog -nojournal -notrace -mode batch
+VIVADO = vivado -nolog -nojournal -notrace -mode batch
+
 
 all: build sim check
 
@@ -81,16 +82,23 @@ check_dco:
 #########################
 
 sim:
-	$(SIM_CMD) -source sim.tcl -tclargs $(RX_SETTING) $(TIME_TRIG)
+	$(VIVADO) -source sim.tcl -tclargs $(RX_SETTING) $(TIME_TRIG)
 
 sim_filter:
-	$(SIM_CMD) -source sim_filter.tcl -tclargs $(RX_SETTING) $(FILTER_PWL_INDEX)
+	$(VIVADO) -source sim_filter.tcl -tclargs $(RX_SETTING) $(FILTER_PWL_INDEX)
 
 sim_dco:
-	$(SIM_CMD) -source sim_dco.tcl
+	$(VIVADO) -source sim_dco.tcl
 
 view:
 	gtkwave $(SIM_DIR)/dump.vcd &
+
+#########################
+# FPGA building commands
+#########################
+
+fpga:
+	$(VIVADO) -source fpga_build.tcl
 
 #########################
 # figure generation commands

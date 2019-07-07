@@ -8,6 +8,7 @@ channel
 figs
 *.egg-info
 *.s4p
+*.str
 *.pyc
 *.tmp
 env
