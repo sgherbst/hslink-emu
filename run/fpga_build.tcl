@@ -42,17 +42,17 @@ set_property -dict [list \
 create_ip -name vio -vendor xilinx.com -library ip -module_name vio_0
 
 set_property -dict [list \
-    CONFIG.C_NUM_PROBE_IN {0} \
-    CONFIG.C_NUM_PROBE_OUT {9} \
-    CONFIG.C_PROBE_OUT0_WIDTH {1} \
-    CONFIG.C_PROBE_OUT1_WIDTH {4} \
-    CONFIG.C_PROBE_OUT2_WIDTH {4} \
-    CONFIG.C_PROBE_OUT3_WIDTH {14} \
-    CONFIG.C_PROBE_OUT4_WIDTH {14} \
-    CONFIG.C_PROBE_OUT5_WIDTH {14} \
-    CONFIG.C_PROBE_OUT6_WIDTH {41} \
-    CONFIG.C_PROBE_OUT7_WIDTH {10} \
-    CONFIG.C_PROBE_OUT8_WIDTH {10} \
+    CONFIG.C_NUM_PROBE_IN 0 \
+    CONFIG.C_NUM_PROBE_OUT 9 \
+    CONFIG.C_PROBE_OUT0_WIDTH 1 \
+    CONFIG.C_PROBE_OUT1_WIDTH 4 \
+    CONFIG.C_PROBE_OUT2_WIDTH 4 \
+    CONFIG.C_PROBE_OUT3_WIDTH 14 \
+    CONFIG.C_PROBE_OUT4_WIDTH 14 \
+    CONFIG.C_PROBE_OUT5_WIDTH 14 \
+    CONFIG.C_PROBE_OUT6_WIDTH 41 \
+    CONFIG.C_PROBE_OUT7_WIDTH 10 \
+    CONFIG.C_PROBE_OUT8_WIDTH 10 \
 ] [get_ips vio_0]
 
 # Create ila_0
@@ -61,6 +61,7 @@ create_ip -name ila -vendor xilinx.com -library ip -module_name ila_0
 
 set_property -dict [list \
     CONFIG.C_NUM_OF_PROBES 5 \
+    CONFIG.C_DATA_DEPTH 1024 \
     CONFIG.C_PROBE0_WIDTH 1 \
     CONFIG.C_PROBE1_WIDTH 41 \
     CONFIG.C_PROBE2_WIDTH 1 \
@@ -74,6 +75,7 @@ create_ip -name ila -vendor xilinx.com -library ip -module_name ila_1
 
 set_property -dict [list \
     CONFIG.C_NUM_OF_PROBES 8 \
+    CONFIG.C_DATA_DEPTH 16384 \
     CONFIG.C_PROBE0_WIDTH 1 \
     CONFIG.C_PROBE1_WIDTH 41 \
     CONFIG.C_PROBE2_WIDTH 1 \
@@ -90,6 +92,7 @@ create_ip -name ila -vendor xilinx.com -library ip -module_name ila_2
 
 set_property -dict [list \
     CONFIG.C_NUM_OF_PROBES 4 \
+    CONFIG.C_DATA_DEPTH 1024 \
     CONFIG.C_PROBE0_WIDTH 1 \
     CONFIG.C_PROBE1_WIDTH 41 \
     CONFIG.C_PROBE2_WIDTH 23 \

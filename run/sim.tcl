@@ -9,7 +9,7 @@ add_files [glob sim.sv]
 
 # defines
 set_property -name verilog_define -value [list \
-    SIM_DEBUG \
+    [lindex $argv 2] \
     PWL_OVFL_CHK \
     RX_SETTING=[lindex $argv 0] \
     TIME_TRIG=[lindex $argv 1] \

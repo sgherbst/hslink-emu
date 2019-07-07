@@ -1,0 +1,29 @@
+[dumpfile] "../build/project/project.sim/sim_1/behav/xsim/dump.vcd"
+[savefile] "view.gtkw"
+[timestart] 0
+[size] 1000 600
+[pos] 91 321
+*-29.736433 2316250000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb.
+[sst_width] 223
+[signals_width] 194
+[sst_expanded] 1
+[sst_vpaned_height] 152
+@8024
+tb.dut_i.dco_code[13:0]
+@20001
+-
+@20000
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+[pattern_trace] 1
+[pattern_trace] 0

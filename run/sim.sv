@@ -14,7 +14,7 @@ module tb;
         `ifdef SIM_DEBUG
             $dumpvars(0, tb);
         `elsif SIM_LEAN
-            $dumpvars(2, tb);
+            $dumpvars(0, dut_i.dco_code);
         `elsif SIM_PROFILE
         `endif
     end
@@ -73,7 +73,8 @@ module tb;
     // Initial DCO code
 
     `ifndef DCO_CODE_INIT
-        `define DCO_CODE_INIT 'd6700
+//        `define DCO_CODE_INIT 'd6700
+        `define DCO_CODE_INIT 'd1000
     `endif
 
     wire [DCO_CODE_WIDTH-1:0] dco_init = `DCO_CODE_INIT;
@@ -89,7 +90,7 @@ module tb;
     // Integral gain of digital loop filter
 
     `ifndef KI_LF
-        `define KI_LF 'd1
+        `define KI_LF 'd16
     `endif
 
     wire signed [DCO_CODE_WIDTH-1:0] ki_lf = `KI_LF;
@@ -97,7 +98,8 @@ module tb;
     // Scale factor on jitter of TX clock
 
     `ifndef JITTER_SCALE_TX
-        `define JITTER_SCALE_TX 'd700
+//        `define JITTER_SCALE_TX 'd700
+        `define JITTER_SCALE_TX 'd0
     `endif
 
     TX_JITTER_SCALE_FORMAT jitter_scale_tx = `JITTER_SCALE_TX;
@@ -105,7 +107,8 @@ module tb;
     // Scale factor on jitter of RX clock
 
     `ifndef JITTER_SCALE_RX
-        `define JITTER_SCALE_RX 'd700
+//        `define JITTER_SCALE_RX 'd700
+        `define JITTER_SCALE_RX 'd0
     `endif
 
     RX_JITTER_SCALE_FORMAT jitter_scale_rx = `JITTER_SCALE_RX;
