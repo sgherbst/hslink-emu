@@ -1,12 +1,10 @@
-from numpy import genfromtxt
+import os.path
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.signal import fftconvolve
+
+from numpy import genfromtxt
 from scipy.interpolate import interp1d
 from scipy.stats import describe
-from math import floor
-import os.path
-import sys
 
 from msemu.clocks import RxClock
 from msemu.pwl import Waveform
@@ -18,16 +16,16 @@ class SimResult:
         self.pwl = pwl
         self.ideal = ideal
 
-def eval():
+def eval(sim_dir):
     # read data
-    data = genfromtxt('dco_pwl_emu.txt', delimiter=',')
+    data = genfromtxt(os.path.join(sim_dir, 'dco_pwl_emu.txt'), delimiter=',')
     t_pwl = data[:, 0]
     v_pwl = data[:, 1]
     pwl = Waveform(t=t_pwl, v=v_pwl)
 
     # get ideal response
     time_fmt = Fixed.make([0, 10e-3], 1e-14, signed=False)
-    clk_rx = RxClock(fmin=7.5e9, fmax=8.5e9, bits=14, jitter_pkpk=2e-12, time_fmt=time_fmt)
+    clk_rx = RxClock(fmin=7.5e9, fmax=8.5e9, bits=14, jitter_pkpk_max=2e-12, time_fmt=time_fmt)
     ideal = clk_rx.dco_tf 
 
     # return waveforms
@@ -63,7 +61,7 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
-    result = eval()
+    result = eval(sim_dir=args.sim_dir)
     measure_error(result)
     plot(result)
     

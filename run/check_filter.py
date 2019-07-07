@@ -1,12 +1,10 @@
-from numpy import genfromtxt
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.signal import fftconvolve
+import os.path
+
+from numpy import genfromtxt
 from scipy.interpolate import interp1d
 from scipy.stats import describe
-from math import floor
-import os.path
-import sys
 
 from msemu.ctle import RxDynamics
 from msemu.pwl import Waveform
@@ -17,12 +15,9 @@ class SimResult:
         self.pwl = pwl
         self.ideal = ideal
 
-def get_combined_step(rx_setting):
-    return RxCTLE().get_combined_step(rx_setting)
-
-def eval(rx_dyn, rx_setting):
+def eval(sim_dir, rx_dyn, rx_setting):
     # read data
-    data = genfromtxt('filter_pwl_emu.txt', delimiter=',')
+    data = genfromtxt(os.path.join(sim_dir, 'filter_pwl_emu.txt'), delimiter=',')
     t_pwl = data[:, 0]
     v_pwl = data[:, 1]
     pwl = Waveform(t=t_pwl, v=v_pwl)
@@ -68,7 +63,7 @@ def main():
     # create the RxDynamics object
     rx_dyn = RxDynamics(dir_name=args.channel_dir)
 
-    result = eval(rx_dyn=rx_dyn, rx_setting=args.rx_setting)
+    result = eval(sim_dir=args.sim_dir, rx_dyn=rx_dyn, rx_setting=args.rx_setting)
 
     measure_error(result)
     plot(result)

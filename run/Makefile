@@ -4,6 +4,19 @@
 # checking the mixed-signal emulator
 
 #########################################
+# simulation configuration
+#########################################
+
+# TIME_TRIG values:
+# 128 ns        ->  18014398
+# 2.048 us      ->  288230376
+TIME_TRIG = 18014398
+
+RX_SETTING = 4
+
+FILTER_PWL_INDEX = 35
+
+#########################################
 # directory structure
 #########################################
 
@@ -18,7 +31,7 @@ SHARED_DIR = $(abspath $(TOP_DIR)/shared/)
 FIG_DIR = $(abspath $(TOP_DIR)/figs/)
 
 ROM_DIR = $(abspath $(BUILD_DIR)/roms/)
-PROJECT_DIR = $(abspath $(BUILD_DIR)/project/)
+SIM_DIR = $(abspath $(BUILD_DIR)/project/project.sim/sim_1/behav/xsim/)
 
 #########################################
 # python options
@@ -30,6 +43,7 @@ PYTHON_OPTS += --channel_dir $(CHANNEL_DIR)
 PYTHON_OPTS += --data_dir $(DATA_DIR)
 PYTHON_OPTS += --rom_dir $(ROM_DIR)
 PYTHON_OPTS += --fig_dir $(FIG_DIR)
+PYTHON_OPTS += --sim_dir $(SIM_DIR)
 
 #########################################
 # git options
@@ -42,7 +56,7 @@ GIT = git
 # simulation options
 #########################################
 
-SIM_CMD = vivado -nolog -nojournal -notrace -mode batch -source
+SIM_CMD = rm -rf ../build/project && vivado -nolog -nojournal -notrace -mode batch
 
 all: build sim check
 
@@ -67,10 +81,16 @@ check_dco:
 #########################
 
 sim:
-	$(SIM_CMD) sim.tcl
+	$(SIM_CMD) -source sim.tcl -tclargs $(RX_SETTING) $(TIME_TRIG)
+
+sim_filter:
+	$(SIM_CMD) -source sim_filter.tcl -tclargs $(RX_SETTING) $(FILTER_PWL_INDEX)
+
+sim_dco:
+	$(SIM_CMD) -source sim_dco.tcl
 
 view:
-	gtkwave $(PROJECT_DIR)/project.sim/sim_1/behav/xsim/dump.vcd &
+	gtkwave $(SIM_DIR)/dump.vcd &
 
 #########################
 # figure generation commands

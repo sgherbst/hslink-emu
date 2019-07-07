@@ -1,5 +1,6 @@
 .DS_Store
 .idea
+.Xil
 __pycache__
 build
 data

@@ -88,7 +88,11 @@ def report_error(data, ideal):
     print('error statistics: ')
     print(describe(err))
 
-def plot_waveforms(data, ideal, fig_dir, plot_prefix, fmts=['png', 'pdf', 'eps']):
+def plot_waveforms(data, ideal, fig_dir, plot_prefix, fmts=None):
+    # set defaults
+    if fmts is None:
+        fmts = ['png', 'pdf', 'eps']
+
     #plt.step(ideal.in_.t, ideal.in_.v, '-k', where='post', label='in')
     plt.plot(ideal.out.t*1e9, ideal.out.v, '-g', label='CPU', linewidth=1)
     plt.plot(np.concatenate((data.rxp.t, data.rxn.t))*1e9,
@@ -135,6 +139,7 @@ def main():
 
     report_error(data=data, ideal=ideal)
 
+    os.makedirs(args.fig_dir, exist_ok=True)
     plot_waveforms(data=data, ideal=ideal, fig_dir=args.fig_dir, plot_prefix=plot_prefix)
     
 if __name__=='__main__':
