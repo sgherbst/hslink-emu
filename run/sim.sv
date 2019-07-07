@@ -8,6 +8,17 @@ import time_package::*;
 
 module tb;
 
+    // set up waveform probing
+
+    initial begin
+        `ifdef SIM_DEBUG
+            $dumpvars(0, tb);
+        `elsif SIM_LEAN
+            $dumpvars(2, tb);
+        `elsif SIM_PROFILE
+        `endif
+    end
+
     // generate differential clock
     
     reg SYSCLK_P = 1'b0;

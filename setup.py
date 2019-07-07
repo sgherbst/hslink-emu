@@ -4,7 +4,7 @@ setup(
     name="msemu",
     version="0.0.1",
     description='Mixed-signal emulation generator',
-    url='https://github.com/sgherbst/msemu',
+    url='https://github.com/sgherbst/hslink-emu',
     author='Steven Herbst',
     author_email='sherbst@stanford.edu',
     packages=['msemu'],
@@ -16,7 +16,6 @@ setup(
         'matplotlib',
         'mpltools',
         'wget',
-        'cvxpy',
         'scikit-rf'
     ]
 )

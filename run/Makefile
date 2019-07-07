@@ -4,33 +4,6 @@
 # checking the mixed-signal emulator
 
 #########################################
-# simulation settings
-# note that all TX and RX settings are
-# built into the emulator, even when
-# only one is exercised in simulation
-#########################################
-
-RX_SETTING = 4
-TX_SETTING = 4
-KP_LF = 256
-KI_LF = 1
-DCO_CODE_INIT = 6700
-JITTER_SCALE_RX = 700
-JITTER_SCALE_TX = 700
-
-# 128 ns
-TIME_TRIG = 18014398
-
-# 2.048 us
-# TIME_TRIG = 288230376
-
-#########################################
-# settings for testing specific features
-#########################################
-
-FILTER_PWL_INDEX = 35
-
-#########################################
 # directory structure
 #########################################
 
@@ -45,12 +18,13 @@ SHARED_DIR = $(abspath $(TOP_DIR)/shared/)
 FIG_DIR = $(abspath $(TOP_DIR)/figs/)
 
 ROM_DIR = $(abspath $(BUILD_DIR)/roms/)
+PROJECT_DIR = $(abspath $(BUILD_DIR)/project/)
 
 #########################################
 # python options
-# only python3 is supported at this time
 #########################################
-PYTHON = source ../env/bin/activate; python
+
+PYTHON = python
 PYTHON_OPTS += --build_dir $(BUILD_DIR)
 PYTHON_OPTS += --channel_dir $(CHANNEL_DIR)
 PYTHON_OPTS += --data_dir $(DATA_DIR)
@@ -61,64 +35,14 @@ PYTHON_OPTS += --fig_dir $(FIG_DIR)
 # git options
 # used for cleaning up files
 #########################################
+
 GIT = git
 
 #########################################
 # simulation options
 #########################################
-SIM_CMD = xrun
 
-# packages
-SIM_PACK_LIST += time_package.sv
-SIM_PACK_LIST += signal_package.sv
-SIM_PACK_LIST += filter_package.sv
-SIM_PACK_LIST += tx_package.sv
-SIM_PACK_LIST += rx_package.sv
-SIM_PACK_LIST += path_package.sv
-SIM_PACK_LIST += lfsr_package.sv
-SIM_PACKS = $(addprefix $(BUILD_DIR)/,$(SIM_PACK_LIST))
-
-# libraries
-SIM_LIB_LIST += $(SHARED_DIR)
-SIM_LIB_LIST += $(CPU_DIR)
-SIM_LIBS = $(addprefix -y ,$(SIM_LIB_LIST))
-
-# defines
-SIM_DEF_LIST += RX_SETTING=$(RX_SETTING)
-SIM_DEF_LIST += TX_SETTING=$(TX_SETTING)
-SIM_DEF_LIST += KP_LF=$(KP_LF)
-SIM_DEF_LIST += KI_LF=$(KI_LF)
-SIM_DEF_LIST += DCO_CODE_INIT=$(DCO_CODE_INIT)
-SIM_DEF_LIST += TIME_TRIG=$(TIME_TRIG)
-SIM_DEF_LIST += JITTER_SCALE_RX=$(JITTER_SCALE_RX)
-SIM_DEF_LIST += JITTER_SCALE_TX=$(JITTER_SCALE_TX)
-SIM_DEF_LIST += PWL_OVFL_CHK
-SIM_DEFS = $(addprefix +define+,$(SIM_DEF_LIST))
-
-# add other options
-SIM_OPTS += $(SIM_PACKS)
-SIM_OPTS += $(SIM_DEFS)
-SIM_OPTS += $(SIM_LIBS)
-SIM_OPTS += +libext+.sv
-SIM_OPTS += -timescale 1ns/1ps
-SIM_OPTS += -sv
-SIM_OPTS += +xm64bit
-
-# options for specific scenarios
-
-# standard simulation (slowest but most visibility)
-SIM_DEBUG_OPTS += -input sim.tcl
-SIM_DEBUG_OPTS += -access +rwc
-
-# lean simulation (faster with less visibility)
-SIM_LEAN_OPTS += -input lean.tcl
-SIM_LEAN_OPTS += -access +r
-
-# profile simulation (fastest but no visibility)
-SIM_PROFILE_OPTS += -input profile.tcl
-SIM_PROFILE_OPTS += -profile
-
-.PHONY: all build check check_ila check_filter sim sim_filter sim_profile clean
+SIM_CMD = vivado -nolog -nojournal -notrace -mode batch -source
 
 all: build sim check
 
@@ -139,27 +63,14 @@ check_dco:
 	$(PYTHON) check_dco.py $(PYTHON_OPTS) 
 
 #########################
-# full system sim commands
+# simulation commands
 #########################
 
 sim:
-	$(SIM_CMD) $(SIM_OPTS) $(SIM_DEBUG_OPTS) sim.sv
+	$(SIM_CMD) sim.tcl
 
-sim_lean:
-	$(SIM_CMD) $(SIM_OPTS) $(SIM_LEAN_OPTS) sim.sv
-
-sim_profile:
-	$(SIM_CMD) $(SIM_OPTS) $(SIM_PROFILE_OPTS) sim.sv
-
-#########################
-# subsystem sim commands
-#########################
-
-sim_filter:
-	$(SIM_CMD) $(SIM_OPTS) $(SIM_DEBUG_OPTS) +define+FILTER_PWL_INDEX=$(FILTER_PWL_INDEX) sim_filter.sv
-
-sim_dco:
-	$(SIM_CMD) $(SIM_OPTS) $(SIM_DEBUG_OPTS) sim_dco.sv
+view:
+	gtkwave $(PROJECT_DIR)/project.sim/sim_1/behav/xsim/dump.vcd &
 
 #########################
 # figure generation commands

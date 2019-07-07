@@ -8,4 +8,5 @@ figs
 *.egg-info
 *.s4p
 *.pyc
+*.tmp
 env

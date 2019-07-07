@@ -2,7 +2,9 @@ import numpy as np
 import logging, sys
 from math import ceil, floor, log2
 from scipy.interpolate import interp1d
-import cvxpy
+
+import scipy.sparse.linalg
+import scipy.sparse
 
 from msemu.fixed import Fixed, WidthFormat
 
@@ -214,7 +216,8 @@ class Waveform:
         v_check = interp1d(self.t, self.v/v_scale_factor)(t_check)
 
         # compute control points
-        A = np.zeros((n_check, len(t_ctrl)))
+        A = scipy.sparse.dok_matrix((n_check, len(t_ctrl)), dtype=float)
+
         for k in range(n_check):
             idx_float = (t_check[k] - t_ctrl[0]) / dtau
             idx_int = int(floor(idx_float))
@@ -227,14 +230,17 @@ class Waveform:
             else:
                 raise Exception('Invalid index.')
 
+        A = A.tocsr()
+
         # run optimization
-        x = cvxpy.Variable(len(t_ctrl))
-        obj = cvxpy.Minimize(cvxpy.pnorm(A*x - v_check, p=float('inf')))
-        prob = cvxpy.Problem(obj)
-        error = prob.solve()*v_scale_factor
+        x = scipy.sparse.linalg.lsqr(A, v_check)[0]
+
+        # compute actual error
+        resid = A.dot(x) - v_check
+        error = np.max(np.abs(resid))*v_scale_factor
 
         # compute PWL respresentation
-        v_ctrl = np.array(x.value).flatten()*v_scale_factor
+        v_ctrl = np.array(x).flatten()*v_scale_factor
         offsets = v_ctrl[:-1]
         slopes = np.diff(v_ctrl)/dtau
 
