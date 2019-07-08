@@ -17,6 +17,7 @@ setup(
         'mpltools',
         'wget',
         'scikit-rf',
-        'pexpect'
+        'pexpect',
+        'tqdm'
     ]
 )

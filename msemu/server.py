@@ -18,12 +18,13 @@ def main():
         rpc_paths = ('/RPC2',)
 
     # Instantiate TCL evaluator
-    child = pexpect.spawn('vivado -nolog -nojournal -notrace -mode tcl')
+    child = pexpect.spawnu('vivado -nolog -nojournal -notrace -mode tcl')
     child.expect('Vivado% ')
 
     # Create server
     with SimpleXMLRPCServer(('localhost', SERVER_PORT),
-                            requestHandler=RequestHandler) as server:
+                            requestHandler=RequestHandler,
+                            allow_none=True) as server:
         server.register_introspection_functions()
 
         def sendline(line):
@@ -31,7 +32,27 @@ def main():
             child.expect('Vivado% ')
             return child.before
 
+        def set_vio(name, value):
+            sendline(f'set_property OUTPUT_VALUE {value} ${name}')
+            sendline(f'commit_hw_vio ${name}')
+
+        def get_vio(name):
+            before = sendline(f'get_property INPUT_VALUE ${name}')
+            before = before.splitlines()[-1] # get last line
+            before = before.strip() # strip off whitespace
+            return before
+
+        def pulse_reset():
+            sendline('pulse_reset $rst')
+
+        def refresh_hw_vio(name):
+            sendline(f'refresh_hw_vio ${name}')
+
         server.register_function(sendline)
+        server.register_function(set_vio)
+        server.register_function(get_vio)
+        server.register_function(pulse_reset)
+        server.register_function(refresh_hw_vio)
 
         print(f'Server ready on port {SERVER_PORT}.')
         server.serve_forever()

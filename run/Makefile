@@ -114,6 +114,9 @@ program:
 emu_dco:
 	$(PYTHON) emu_dco.py
 
+emu_loopback:
+	$(PYTHON) emu_loopback.py
+
 #########################
 # figure generation commands
 #########################
