@@ -36,7 +36,7 @@ module clkgen(
 
         // RX clock (falling edge)
         .clk_out4(   clk_rx_n),
-        .clk_out4_ce(cke_rx_n)
+        .clk_out4_ce(cke_rx_n),
 
         // Debug clock (for ILA/VIO)
         .clk_out5(clk_dbg)
