@@ -102,11 +102,17 @@ view:
 	gtkwave $(SIM_DIR)/dump.vcd view.gtkw &
 
 #########################
-# FPGA building commands
+# FPGA commands
 #########################
 
 fpga:
 	$(VIVADO) -source fpga_build.tcl
+
+program:
+	$(PYTHON) program.py
+
+emu_dco:
+	$(PYTHON) emu_dco.py
 
 #########################
 # figure generation commands

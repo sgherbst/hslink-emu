@@ -16,6 +16,7 @@ setup(
         'matplotlib',
         'mpltools',
         'wget',
-        'scikit-rf'
+        'scikit-rf',
+        'pexpect'
     ]
 )
