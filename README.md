@@ -68,7 +68,12 @@ The instructions below assume that **python** and **pip** commands refer to a Py
 2. On line 85, change to "db_vals = list(range(2))". 
 
 ### Using a different FPGA board
-1. In fpga/constr.xdc, update the "System Clock" and "Status Outputs" sections.  The 
+1. In fpga/constr.xdc, update the "System Clock" and "Status Outputs" sections.  The "Debug Hub Clock" section likely does not have to be updated.
+2. In run/fpga_build.tcl, update:
+  1. The part name on line 3.
+  2. The input clock information on lines 24-25.
+3. In run/program.tcl, update:
+  1. The part name on line 10.
 
 ## Citing
 
