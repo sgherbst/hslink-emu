@@ -15,6 +15,9 @@ module tb;
             $dumpvars(0, tb);
         `elsif SIM_LEAN
             $dumpvars(0, dut_i.dco_code);
+            $dumpvars(0, dut_i.run_state);
+            $dumpvars(0, dut_i.time_curr);
+            $dumpvars(0, dut_i.loopback_test_i);
         `elsif SIM_PROFILE
         `endif
     end
@@ -43,13 +46,25 @@ module tb;
         rst = 1'b0;
     end
 
-    // monitor time flag
+    // monitor running state to see when the emulation has finished
 
-    wire time_flag;
-    always @(time_flag) begin
-        if (time_flag == 1'b1) begin
-            $finish;
-        end
+    // TODO: move to a package
+    localparam [2:0] IN_RESET   =   3'b100;
+    localparam [2:0] WAITING    =   3'b000;
+    localparam [2:0] RUNNING    =   3'b010;
+    localparam [2:0] DONE       =   3'b001;
+
+    wire [2:0] run_state;
+    always @(run_state) begin
+        case (run_state)
+            IN_RESET: $display("IN_RESET");
+            WAITING: $display("WAITING");
+            RUNNING: $display("RUNNING");
+            DONE: begin
+                $display("DONE");
+                $finish;
+            end
+        endcase
     end
 
     // I/O set by VIO on the FPGA
@@ -74,7 +89,7 @@ module tb;
 
     `ifndef DCO_CODE_INIT
 //        `define DCO_CODE_INIT 'd6700
-        `define DCO_CODE_INIT 'd1000
+        `define DCO_CODE_INIT 'd8192
     `endif
 
     wire [DCO_CODE_WIDTH-1:0] dco_init = `DCO_CODE_INIT;
@@ -90,7 +105,7 @@ module tb;
     // Integral gain of digital loop filter
 
     `ifndef KI_LF
-        `define KI_LF 'd16
+        `define KI_LF 'd1
     `endif
 
     wire signed [DCO_CODE_WIDTH-1:0] ki_lf = `KI_LF;
@@ -113,16 +128,33 @@ module tb;
 
     RX_JITTER_SCALE_FORMAT jitter_scale_rx = `JITTER_SCALE_RX;
 
-    // For CPU simulation, time_trig is used to 
+    // start_time is used to indicate when the
+    // loopback tester should start recording
+
+    `ifndef START_TIME
+//        `define START_TIME 0
+        `define START_TIME 144115188
+    `endif
+    wire TIME_FORMAT start_time = `START_TIME;
+
+    // For CPU simulation, stop_time is used to
     // indicate the end of simulation.  On the
     // FPGA, this signal is used for triggering
     // debug cores.
 
-    `ifndef TIME_TRIG
-        // `define TIME_TRIG 18014398 // 128 ns
-        `define TIME_TRIG 288230376 // 2.048 us
+    `ifndef STOP_TIME
+        // `define STOP_TIME 18014398 // 128 ns
+        `define STOP_TIME 288230376 // 2.048 us
     `endif
-    wire TIME_FORMAT time_trig = `TIME_TRIG;
+    wire TIME_FORMAT stop_time = `STOP_TIME;
+
+    // loopback_offset indicates the delay between transmitted
+    // TX bits and received RX bits
+
+    `ifndef LOOPBACK_OFFSET
+        `define LOOPBACK_OFFSET 35
+    `endif
+    wire [7:0] loopback_offset = `LOOPBACK_OFFSET;
 
     dut #(
         .USE_VIO(0)
@@ -136,7 +168,7 @@ module tb;
 
         // time flag used here to indicate
         // end of emulation
-        .time_flag(time_flag),
+        .run_state(run_state),
 
         // I/O normally controlled by VIO
         .rx_setting_ext(rx_setting),
@@ -144,7 +176,9 @@ module tb;
         .dco_init_ext(dco_init),
         .kp_lf_ext(kp_lf),
         .ki_lf_ext(ki_lf),
-        .time_trig_ext(time_trig),
+        .start_time_ext(start_time),
+        .stop_time_ext(stop_time),
+        .loopback_offset_ext(loopback_offset),
         .jitter_scale_tx_ext(jitter_scale_tx),
         .jitter_scale_rx_ext(jitter_scale_rx)
     );

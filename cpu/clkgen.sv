@@ -9,7 +9,8 @@ module clkgen(
     output wire clk_sys,
     output wire clk_tx,
     output wire clk_rx_p,
-    output wire clk_rx_n
+    output wire clk_rx_n,
+    output wire clk_dbg
 );
     reg clk_orig = 1'b0;
     initial begin

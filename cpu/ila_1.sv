@@ -11,7 +11,7 @@ module ila_1 (
     input DFE_OUT_FORMAT probe4,
     input COMP_IN_FORMAT probe5,
     input DCO_CODE_FORMAT probe6,
-    input probe7
+    input [2:0] probe7
 );
 
     `ifndef SIM_PROFILE

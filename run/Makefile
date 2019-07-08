@@ -7,11 +7,15 @@
 # simulation configuration
 #########################################
 
-# TIME_TRIG values:
-# 128 ns        ->  18014398
-# 1 us          ->  140737488
+# TIME values:
+
+# 128 ns        ->   18014398
+# 0.423 us      ->   59601696
+# 1.024 us      ->  144115188
 # 2.048 us      ->  288230376
-TIME_TRIG = 140737488
+
+START_TIME = 59601696
+STOP_TIME = 144115188
 
 RX_SETTING = 4
 
@@ -83,10 +87,10 @@ check_dco:
 #########################
 
 sim:
-	$(VIVADO) -source sim.tcl -tclargs $(RX_SETTING) $(TIME_TRIG) SIM_DEBUG
+	$(VIVADO) -source sim.tcl -tclargs $(RX_SETTING) $(START_TIME) $(STOP_TIME) SIM_DEBUG
 
 sim_lean:
-	$(VIVADO) -source sim.tcl -tclargs $(RX_SETTING) $(TIME_TRIG) SIM_LEAN
+	$(VIVADO) -source sim.tcl -tclargs $(RX_SETTING) $(START_TIME) $(STOP_TIME) SIM_LEAN
 
 sim_filter:
 	$(VIVADO) -source sim_filter.tcl -tclargs $(RX_SETTING) $(FILTER_PWL_INDEX)

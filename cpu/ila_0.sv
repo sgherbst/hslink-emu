@@ -8,7 +8,7 @@ module ila_0 (
     input TIME_FORMAT probe1,
     input probe2,
     input FILTER_IN_FORMAT probe3,
-    input probe4
+    input [2:0] probe4
 );
 
     `ifndef SIM_PROFILE

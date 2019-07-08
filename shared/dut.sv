@@ -11,7 +11,7 @@ module dut #(
 )(
     input wire SYSCLK_P,
     input wire SYSCLK_N,
-    output reg time_flag,
+    output reg [2:0] run_state,
 
     // I/O covered by VIO on FPGA
     input wire rst_ext,
@@ -20,7 +20,9 @@ module dut #(
     input DCO_CODE_FORMAT dco_init_ext,
     input signed [DCO_CODE_WIDTH-1:0] ki_lf_ext,
     input signed [DCO_CODE_WIDTH-1:0] kp_lf_ext,
-    input TIME_FORMAT time_trig_ext,
+    input TIME_FORMAT start_time_ext,
+    input TIME_FORMAT stop_time_ext,
+    input [7:0] loopback_offset_ext,
     input TX_JITTER_SCALE_FORMAT jitter_scale_tx_ext,
     input RX_JITTER_SCALE_FORMAT jitter_scale_rx_ext
 );
@@ -40,7 +42,7 @@ module dut #(
         .probe1(time_curr),
         .probe2(out_tx),
         .probe3(filter_in),
-        .probe4(time_flag)
+        .probe4(run_state)
     );
 
     // Debug: RX P
@@ -60,7 +62,7 @@ module dut #(
         .probe4(dfe_out),
         .probe5(comp_in),
         .probe6(dco_code),
-        .probe7(time_flag)
+        .probe7(run_state)
     );
 
     // Debug: RX N
@@ -71,7 +73,7 @@ module dut #(
         .probe0(rst_rx_n),
         .probe1(time_curr),
         .probe2(filter_out),
-        .probe3(time_flag)
+        .probe3(run_state)
     );
 
     // Clock generation code
@@ -79,6 +81,7 @@ module dut #(
     wire cke_rx_p;
     wire cke_rx_n;
     wire clk_sys;
+    wire clk_dbg;
     clkgen clkgen_i(
         .SYSCLK_P(SYSCLK_P),
         .SYSCLK_N(SYSCLK_N), 
@@ -88,17 +91,26 @@ module dut #(
         .clk_rx_p(clk_rx_p),
         .cke_rx_p(cke_rx_p),
         .clk_rx_n(clk_rx_n),
-        .cke_rx_n(cke_rx_n)
+        .cke_rx_n(cke_rx_n),
+        .clk_dbg(clk_dbg)
     );
 
-    // DUT I/O                    
+    // VIO inputs
+
+    logic [31:0] rx_good_bits;
+    logic [31:0] rx_bad_bits;
+    logic [31:0] rx_total_bits;
+
+    // VIO outputs
     wire rst;
     wire [RX_SETTING_WIDTH-1:0] rx_setting;
     wire [TX_SETTING_WIDTH-1:0] tx_setting;
     DCO_CODE_FORMAT dco_init;
     wire signed [DCO_CODE_WIDTH-1:0] kp_lf;
     wire signed [DCO_CODE_WIDTH-1:0] ki_lf;
-    TIME_FORMAT time_trig;
+    TIME_FORMAT start_time;
+    TIME_FORMAT stop_time;
+    wire [7:0] loopback_offset;
     TX_JITTER_SCALE_FORMAT jitter_scale_tx;
     RX_JITTER_SCALE_FORMAT jitter_scale_rx;
 
@@ -107,15 +119,20 @@ module dut #(
         if (USE_VIO == 1) begin
             vio_0 vio_0_i (
                 .clk(clk_sys),
+                .probe_in0(rx_good_bits),
+                .probe_in1(rx_bad_bits),
+                .probe_in2(rx_total_bits),
                 .probe_out0(rst),
                 .probe_out1(rx_setting),
                 .probe_out2(tx_setting),
                 .probe_out3(dco_init),
                 .probe_out4(kp_lf),
                 .probe_out5(ki_lf),
-                .probe_out6(time_trig),
-                .probe_out7(jitter_scale_tx),
-                .probe_out8(jitter_scale_rx)
+                .probe_out6(start_time),
+                .probe_out7(stop_time),
+                .probe_out8(loopback_offset),
+                .probe_out9(jitter_scale_tx),
+                .probe_out10(jitter_scale_rx)
             );
         end else begin
             assign rst = rst_ext;
@@ -124,7 +141,9 @@ module dut #(
             assign dco_init = dco_init_ext;
             assign kp_lf = kp_lf_ext;
             assign ki_lf = ki_lf_ext;
-            assign time_trig = time_trig_ext;
+            assign start_time = start_time_ext;
+            assign stop_time = stop_time_ext;
+            assign loopback_offset = loopback_offset_ext;
             assign jitter_scale_tx = jitter_scale_tx_ext;
             assign jitter_scale_rx = jitter_scale_rx_ext;
         end
@@ -245,14 +264,48 @@ module dut #(
         .rst(rst_sys)
     );
 
+    // Monitor loopback
+
+    loopback_test loopback_test_i (
+        // RX and TX clock+data
+        .out_tx(out_tx),
+        .cke_tx(cke_tx),
+        .out_rx(out_rx),
+        .cke_rx(cke_rx_p),
+
+        // analysis outputs
+        .rx_good_bits(rx_good_bits),
+        .rx_bad_bits(rx_bad_bits),
+        .rx_total_bits(rx_total_bits),
+
+        // control
+        .run_state(run_state),
+        .loopback_offset(loopback_offset),
+
+        // clock and reset
+        .clk(clk_sys),
+        .rst(rst_sys)
+    );
+
     // Monitor time
+
+    // TODO: move to a package
+    localparam [2:0] IN_RESET   =   3'b100;
+    localparam [2:0] WAITING    =   3'b000;
+    localparam [2:0] RUNNING    =   3'b010;
+    localparam [2:0] DONE       =   3'b001;
+
     always @(posedge clk_sys) begin
         if (rst == 1'b1) begin
-            time_flag <= 1'b0;
-        end else if (time_curr >= time_trig) begin
-            time_flag <= 1'b1;
+            run_state <= IN_RESET;
         end else begin
-            time_flag <= time_flag;
+            case (run_state)
+                IN_RESET:   run_state <= WAITING;
+                WAITING:    run_state <= (time_curr >= start_time) ? RUNNING: WAITING;
+                RUNNING:    run_state <= (time_curr >= stop_time) ? DONE : RUNNING;
+                DONE:       run_state <= run_state;
+                default:    run_state <= run_state;
+            endcase
         end
     end
 
