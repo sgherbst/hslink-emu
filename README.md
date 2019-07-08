@@ -2,12 +2,14 @@
 
 ## Introduction
 
-This example illustrates an event-driven methodology for precisely modeling analog dynamics on FPGAs, capable of achieving  ~1000x speedup as compared to optimized CPU simulations.
+This example illustrates an event-driven methodology for precisely modeling analog dynamics on FPGAs, capable of achieving  ~1000x speedup as compared to optimized CPU simulations.  If you're interested to learn more about the approach, please consider reading our ICCAD 2018 paper, "Fast FPGA emulation of analog dynamics in digitally-driven systems" ([https://doi.org/10.1145/3240765.3240808](https://doi.org/10.1145/3240765.3240808)).
 
 ## Prerequisites
 
-1. Vivado installed on Linux.  These instructions were tested with Vivado 2018.3 Design Edition on Ubuntu 18.04.
-2. [ZC706 FPGA Board](https://www.xilinx.com/products/boards-and-kits/ek-z7-zc706-g.html).
+1. Computer running Linux (tested with Ubuntu 18.04).
+2. Vivado installation (tested with Vivado 2018.3 Design Edition).  The PATH variable should be set to include the **vivado** command.
+3. Python3 installation (tested with Python 3.7 installed through miniconda).
+4. [ZC706 FPGA Board](https://www.xilinx.com/products/boards-and-kits/ek-z7-zc706-g.html).
 
 ## Installation
 
@@ -64,6 +66,9 @@ The instructions below assume that **python** and **pip** commands refer to a Py
 ### If you only have one "CTLE" mode
 1. To avoid building 16 different models, of hslink-emu/msemu/ctle.py.
 2. On line 85, change to "db_vals = list(range(2))". 
+
+### Using a different FPGA board
+1. In fpga/constr.xdc, update the "System Clock" and "Status Outputs" sections.  The 
 
 ## Citing
 
