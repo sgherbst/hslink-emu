@@ -4,6 +4,9 @@
 
 This example illustrates an event-driven methodology for precisely modeling analog dynamics on FPGAs, capable of achieving  ~1000x speedup as compared to optimized CPU simulations.  If you're interested to learn more about the approach, please consider reading our ICCAD 2018 paper, "Fast FPGA emulation of analog dynamics in digitally-driven systems" ([https://doi.org/10.1145/3240765.3240808](https://doi.org/10.1145/3240765.3240808)).
 
+## Demo Video
+The emulation process is illustrated in this [demo video](https://www.dropbox.com/s/grqt5md2z4u4d2a/High-speed%20link%20emulation%20071119.mp4?dl=0) prepared for ERI Summit 2019.  The demo corresponds to steps 7-9 in the "Installation" section.
+
 ## Prerequisites
 
 1. Computer running Linux (tested with Ubuntu 18.04).
